@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
   Image,
@@ -11,10 +10,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenContainer from '../components/layout/ScreenContainer';
-import { Restaurant, RestaurantDetail } from '../types/restaurant';
-import { getRestaurantById } from '../services/api/restaurantApi';
+import { RestaurantDetail } from '../types/restaurant';
+import { getRestaurantById } from '../services/api/restaurantService';
 import { restaurantDetailMock, sampleRestaurant } from '../mocks/restaurantDetailMock';
 import { parseMenuField } from '../utils/menuParser';
+import { restaurantDetailStyles as styles } from './RestaurantDetailScreen.styles';
 
 interface RestaurantDetailScreenProps {
   restaurantId?: string;
@@ -91,9 +91,9 @@ export default function RestaurantDetailScreen({
     );
   }
 
-  const location = restaurant.locations?.[0];
+  const location = restaurant.locations?.[0] || 'Dirección no disponible';
   const parsedMenu = parseMenuField(restaurant.menu);
-  const priceLabel = `$$${restaurant.priceMin} - $${restaurant.priceMax}`;
+  const priceLabel = `$${restaurant.priceMin.toLocaleString()} - $$${restaurant.priceMax.toLocaleString()}`;
   const cuisineTag = restaurant.theme || restaurant.tags?.[0] || 'Restaurante';
 
   return (
@@ -121,10 +121,7 @@ export default function RestaurantDetailScreen({
           {/* Restaurant Logo */}
           <View style={styles.logoContainer}>
             {restaurant.logo ? (
-              <Image
-                source={{ uri: restaurant.logo }}
-                style={styles.logo}
-              />
+              <Image source={{ uri: restaurant.logo }} style={styles.logo} />
             ) : (
               <View style={styles.logoFallback}>
                 <Ionicons name="restaurant" size={80} color="#c9a96e" />
@@ -146,9 +143,7 @@ export default function RestaurantDetailScreen({
             </View>
             <View style={[styles.badge, restaurant.isOpen ? styles.badgeOpen : styles.badgeClosed]}>
               <View style={[styles.statusDot, restaurant.isOpen && styles.statusDotOpen]} />
-              <Text style={styles.badgeText}>
-                {restaurant.isOpen ? 'Abierto' : 'Cerrado'}
-              </Text>
+              <Text style={styles.badgeText}>{restaurant.isOpen ? 'Abierto' : 'Cerrado'}</Text>
             </View>
             <View style={styles.badge}>
               <Ionicons name="cash" size={14} color="#c9a96e" />
@@ -169,12 +164,8 @@ export default function RestaurantDetailScreen({
                 />
               ))}
             </View>
-            <Text style={styles.ratingText}>
-              {restaurant.averageRating.toFixed(1)}
-            </Text>
-            <Text style={styles.reviewCountText}>
-              · {restaurant.reviewCount} reseñas
-            </Text>
+            <Text style={styles.ratingText}>{restaurant.averageRating.toFixed(1)}</Text>
+            <Text style={styles.reviewCountText}>· {restaurant.reviewCount} reseñas</Text>
           </View>
 
           {/* Description */}
@@ -186,21 +177,14 @@ export default function RestaurantDetailScreen({
             <View style={styles.infoCard}>
               <Ionicons name="location" size={20} color="#c9a96e" />
               <Text style={styles.infoLabel}>DIRECCIÓN</Text>
-              <Text style={styles.infoValue}>
-                {location?.address || 'Dirección no disponible'}
-              </Text>
-              {location?.city && (
-                <Text style={styles.infoCity}>{location.city}</Text>
-              )}
+              <Text style={styles.infoValue}>{location}</Text>
             </View>
 
             {/* Hours Card */}
             <View style={styles.infoCard}>
               <Ionicons name="time" size={20} color="#c9a96e" />
               <Text style={styles.infoLabel}>HORARIO</Text>
-              <Text style={styles.infoValue}>
-                {restaurant.hour || 'Mar-Dom 12:00-22:00'}
-              </Text>
+              <Text style={styles.infoValue}>{restaurant.hour || 'Mar-Dom 12:00-22:00'}</Text>
               <Text style={styles.infoExtra}>{restaurant.openUntilLabel}</Text>
             </View>
 
@@ -237,18 +221,16 @@ export default function RestaurantDetailScreen({
               <Text style={styles.menuText}>{parsedMenu.content}</Text>
             )}
 
-            {parsedMenu.type === 'items' && Array.isArray(parsedMenu.content) && (
+            {parsedMenu.type === 'items' && (
               <View style={styles.menuItems}>
-                {(parsedMenu.content as Array<{ name: string; price?: number }>).map((item, idx) => (
+                {parsedMenu.content.map((item, idx) => (
                   <View key={idx} style={styles.menuItem}>
                     <Ionicons name="checkmark-circle" size={16} color="#c9a96e" />
                     <View style={styles.menuItemContent}>
                       <Text style={styles.menuItemName}>{item.name}</Text>
                     </View>
                     {item.price && (
-                      <Text style={styles.menuItemPrice}>
-                        ${item.price.toLocaleString()}
-                      </Text>
+                      <Text style={styles.menuItemPrice}>${item.price.toLocaleString()}</Text>
                     )}
                   </View>
                 ))}
@@ -280,306 +262,3 @@ export default function RestaurantDetailScreen({
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 12,
-    fontSize: 14,
-  },
-  errorText: {
-    color: '#FF6B35',
-    fontSize: 16,
-    marginBottom: 20,
-  },
-  retryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: '#c9a96e',
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#0C1D32',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-
-  /* Hero Section */
-  heroSection: {
-    height: 280,
-    backgroundColor: '#2D4356',
-    position: 'relative',
-    marginHorizontal: 0,
-    marginBottom: 24,
-  },
-  backButton: {
-    position: 'absolute',
-    top: 12,
-    left: 20,
-    zIndex: 10,
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: 22,
-  },
-  favoriteButton: {
-    position: 'absolute',
-    top: 12,
-    right: 20,
-    zIndex: 10,
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: 22,
-  },
-  logoContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logo: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: '#1a2a3a',
-    borderWidth: 4,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  logoFallback: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(201, 169, 110, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(201, 169, 110, 0.3)',
-  },
-
-  /* Content Section */
-  contentSection: {
-    paddingHorizontal: 20,
-  },
-  restaurantName: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 12,
-  },
-  badgesRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-    flexWrap: 'wrap',
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(201, 169, 110, 0.15)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(201, 169, 110, 0.3)',
-  },
-  badgeOpen: {
-    backgroundColor: 'rgba(76, 175, 80, 0.15)',
-    borderColor: 'rgba(76, 175, 80, 0.3)',
-  },
-  badgeClosed: {
-    backgroundColor: 'rgba(244, 67, 54, 0.15)',
-    borderColor: 'rgba(244, 67, 54, 0.3)',
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#F44336',
-  },
-  statusDotOpen: {
-    backgroundColor: '#4CAF50',
-  },
-  badgeText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  badgePriceText: {
-    color: '#c9a96e',
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  starsContainer: {
-    flexDirection: 'row',
-  },
-  ratingText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  reviewCountText: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 12,
-  },
-  description: {
-    color: 'rgba(255, 255, 255, 0.75)',
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-
-  /* Info Grid */
-  infoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 24,
-  },
-  infoCard: {
-    flex: 1,
-    minWidth: '48%',
-    backgroundColor: '#132238',
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  infoLabel: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 8,
-    marginBottom: 4,
-    letterSpacing: 0.5,
-  },
-  infoValue: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  infoExtra: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  infoCity: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 11,
-    marginTop: 2,
-  },
-
-  /* Menu Section */
-  menuSection: {
-    marginBottom: 24,
-  },
-  menuTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 12,
-  },
-  menuEmptyState: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    backgroundColor: 'rgba(201, 169, 110, 0.08)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(201, 169, 110, 0.2)',
-  },
-  menuEmptyText: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 14,
-    marginTop: 12,
-    textAlign: 'center',
-  },
-  menuText: {
-    color: 'rgba(255, 255, 255, 0.75)',
-    fontSize: 13,
-    lineHeight: 20,
-    backgroundColor: '#132238',
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  menuItems: {
-    gap: 10,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#132238',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    gap: 10,
-  },
-  menuItemContent: {
-    flex: 1,
-  },
-  menuItemName: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  menuItemPrice: {
-    color: '#c9a96e',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  menuUrlButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#c9a96e',
-    paddingVertical: 14,
-    borderRadius: 8,
-  },
-  menuUrlButtonText: {
-    color: '#0C1D32',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-
-  /* Reservation Button */
-  reservationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#FF6B35',
-    paddingVertical: 14,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  reservationButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  bottomSpacer: {
-    height: 20,
-  },
-});

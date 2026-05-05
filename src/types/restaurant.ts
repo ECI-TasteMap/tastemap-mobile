@@ -1,14 +1,4 @@
 /**
- * Location information for a restaurant
- */
-export interface Location {
-  address: string;
-  latitude?: number;
-  longitude?: number;
-  city?: string;
-}
-
-/**
  * Restaurant type matching the backend DTO
  */
 export interface Restaurant {
@@ -19,7 +9,7 @@ export interface Restaurant {
   logo?: string; // URL to restaurant logo or fallback
   menu: string; // Plain text, comma/semicolon separated items, URL, or PDF link
   theme?: string; // e.g., 'Italiana', 'Mexicana', etc.
-  locations: Location[];
+  locations: string[];
   tags: string[]; // e.g., ['Auténtica', 'Pastas artesanales']
   priceMin: number;
   priceMax: number;

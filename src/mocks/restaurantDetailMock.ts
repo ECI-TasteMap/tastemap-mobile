@@ -22,18 +22,12 @@ export const sampleRestaurant = {
   id: '1',
   ownerId: 'owner-1',
   name: 'La Trattoria',
-  description: 'Auténtica cocina italiana en el corazón de Chapinero. Pastas artesanales, risottos cremosos y una selección de vinos importados que harán de tu velada algo especial.',
+  description:
+    'Auténtica cocina italiana en el corazón de Chapinero. Pastas artesanales, risottos cremosos y una selección de vinos importados que harán de tu velada algo especial.',
   logo: '',
   menu: 'Spaghetti Carbonara - $38.000, Risotto de Champiñones - $45.000, Tiramisu - $18.000, Vino Tinto Reserva - $55.000',
   theme: 'Italiana',
-  locations: [
-    {
-      address: 'Cra 13 #67-42',
-      city: 'Chapinero',
-      latitude: 4.6326,
-      longitude: -74.0582,
-    },
-  ],
+  locations: ['Cra 13 #67-42, Chapinero'],
   tags: ['Italiana', 'Auténtica', 'Pastas artesanales'],
   priceMin: 30000,
   priceMax: 100000,

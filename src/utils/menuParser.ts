@@ -6,14 +6,11 @@ export interface MenuItem {
   price?: number;
 }
 
-/**
- * Result of parsing the menu field
- */
-export interface ParsedMenu {
-  type: 'text' | 'items' | 'url' | 'empty';
-  content: string | MenuItem[];
-  displayUrl?: string;
-}
+export type ParsedMenu =
+  | { type: 'empty'; content: string }
+  | { type: 'text'; content: string }
+  | { type: 'items'; content: MenuItem[] }
+  | { type: 'url'; content: string; displayUrl: string };
 
 /**
  * Parse restaurant.menu field
@@ -92,9 +89,7 @@ function parseMenuItems(text: string): MenuItem[] {
     return [];
   }
 
-  return parts
-    .map((part) => parseMenuItem(part.trim()))
-    .filter((item) => item.name.length > 0);
+  return parts.map((part) => parseMenuItem(part.trim())).filter((item) => item.name.length > 0);
 }
 
 /**
@@ -125,7 +120,12 @@ function parseMenuItem(text: string): MenuItem {
  * Extract numeric price from string like "$38.000" or "38000"
  */
 function extractPrice(priceStr: string): number | undefined {
-  const cleaned = priceStr.replace(/[$\s]/g, '');
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? undefined : num;
+  const cleaned = priceStr.replace(/\D/g, '');
+
+  if (!cleaned) {
+    return undefined;
+  }
+
+  const price = parseInt(cleaned, 10);
+  return Number.isNaN(price) ? undefined : price;
 }

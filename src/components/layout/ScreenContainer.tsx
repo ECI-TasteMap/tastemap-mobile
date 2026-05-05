@@ -1,6 +1,7 @@
 import React, { ReactNode } from 'react';
-import { View, ViewStyle, StyleSheet } from 'react-native';
+import { View, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { screenContainerStyles as styles } from './ScreenContainer.styles';
 
 interface ScreenContainerProps {
   children: ReactNode;
@@ -21,15 +22,3 @@ export default function ScreenContainer({
     </Container>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0C1D32',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 0,
-  },
-});
