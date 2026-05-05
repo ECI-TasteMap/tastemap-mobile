@@ -1,4 +1,4 @@
-const BASE_URL = 'https://tastemapbackend.onrender.com';
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
 export const getRestaurants = async () => {
   const response = await fetch(`${BASE_URL}/api/v1/restaurants`);
