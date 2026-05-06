@@ -1,12 +1,14 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
-import BottomNavBar from './src/components/BottomNavBar';
+import RestaurantBottomNavBar from './src/components/RestaurantBottomNavBar';
+import RestaurantNewLocal from './src/screens/RestaurantNewLocal';
 
 export default function App() {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <BottomNavBar />
+      <RestaurantNewLocal />
+      <RestaurantBottomNavBar />
     </View>
   );
 }
