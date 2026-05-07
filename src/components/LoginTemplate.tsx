@@ -112,14 +112,16 @@ export default function LoginTemplate({
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={authStyles.container}
     >
-      <ScrollView contentContainerStyle={authStyles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={[authStyles.scrollContent, { paddingBottom: insets.bottom + 16 }]}
+      >
         {/* Header */}
         <View
           style={[
             authStyles.header,
             {
               backgroundColor: headerBackgroundColor,
-              paddingTop: insets.top + 24,
+              paddingTop: insets.top + 16,
             },
           ]}
         >

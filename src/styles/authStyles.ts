@@ -14,11 +14,11 @@ export const authStyles = StyleSheet.create({
   },
 
   header: {
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.xl,
     alignItems: 'center',
     borderBottomLeftRadius: radius.xl,
     borderBottomRightRadius: radius.xl,
-    minHeight: 220,
+    minHeight: 180,
     justifyContent: 'center',
   },
 
@@ -60,8 +60,8 @@ export const authStyles = StyleSheet.create({
 
   formContainer: {
     paddingHorizontal: spacing.screen,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
   },
 
   mainTitle: {
@@ -146,7 +146,7 @@ export const authStyles = StyleSheet.create({
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: spacing.lg,
+    marginVertical: spacing.md,
   },
 
   dividerLine: {
@@ -180,7 +180,7 @@ export const authStyles = StyleSheet.create({
 
   footerContainer: {
     paddingHorizontal: spacing.screen,
-    paddingBottom: spacing.xl,
+    paddingTop: spacing.lg,
     gap: spacing.md,
   },
 
