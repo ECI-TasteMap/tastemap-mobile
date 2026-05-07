@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AuthInput from './AuthInput';
 import { authStyles } from '../styles/authStyles';
 
@@ -25,10 +26,12 @@ interface LoginTemplateProps {
   primaryButtonText: string;
   primaryButtonColor: string;
   secondaryButtonText: string;
-  footerText: string;
-  footerActionText: string;
+  footerText?: string;
+  footerActionText?: string;
+  footerActionColor?: string;
   footerSecondaryText?: string;
   footerSecondaryActionText?: string;
+  footerSecondaryActionColor?: string;
   onPrimaryPress?: () => void;
   onSecondaryPress?: () => void;
   onFooterActionPress?: () => void;
@@ -52,13 +55,16 @@ export default function LoginTemplate({
   secondaryButtonText,
   footerText,
   footerActionText,
+  footerActionColor,
   footerSecondaryText,
   footerSecondaryActionText,
+  footerSecondaryActionColor,
   onPrimaryPress,
   onSecondaryPress,
   onFooterActionPress,
   onFooterSecondaryActionPress,
 }: LoginTemplateProps) {
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -96,7 +102,9 @@ export default function LoginTemplate({
 
   const primaryButtonStyle = [
     authStyles.primaryButton,
-    primaryButtonColor === '#34A853' && authStyles.primaryButtonGreen,
+    { backgroundColor: primaryButtonColor },
+    mode === 'user' && authStyles.primaryButtonGold,
+    mode === 'restaurant' && authStyles.primaryButtonGreen,
   ];
 
   return (
@@ -106,7 +114,15 @@ export default function LoginTemplate({
     >
       <ScrollView contentContainerStyle={authStyles.scrollContent}>
         {/* Header */}
-        <View style={[authStyles.header, { backgroundColor: headerBackgroundColor }]}>
+        <View
+          style={[
+            authStyles.header,
+            {
+              backgroundColor: headerBackgroundColor,
+              paddingTop: insets.top + 24,
+            },
+          ]}
+        >
           <Text style={authStyles.tasteMapTitle}>{title}</Text>
           {badgeText && (
             <View style={authStyles.badgeContainer}>
@@ -169,21 +185,31 @@ export default function LoginTemplate({
 
         {/* Footer */}
         <View style={authStyles.footerContainer}>
-          <Text style={authStyles.footerText}>
-            {footerText}{' '}
-            <Text
-              style={[authStyles.footerText, authStyles.footerActionText]}
-              onPress={handleFooterActionPress}
-            >
-              {footerActionText}
+          {footerText && footerActionText && (
+            <Text style={authStyles.footerText}>
+              {footerText}{' '}
+              <Text
+                style={[
+                  authStyles.footerText,
+                  authStyles.footerActionText,
+                  footerActionColor && { color: footerActionColor },
+                ]}
+                onPress={handleFooterActionPress}
+              >
+                {footerActionText}
+              </Text>
             </Text>
-          </Text>
+          )}
 
           {footerSecondaryText && footerSecondaryActionText && (
             <Text style={authStyles.footerText}>
               {footerSecondaryText}{' '}
               <Text
-                style={[authStyles.footerText, authStyles.footerActionText]}
+                style={[
+                  authStyles.footerText,
+                  authStyles.footerActionText,
+                  footerSecondaryActionColor && { color: footerSecondaryActionColor },
+                ]}
                 onPress={handleFooterSecondaryActionPress}
               >
                 {footerSecondaryActionText}

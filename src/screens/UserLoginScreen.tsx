@@ -18,13 +18,11 @@ export default function UserLoginScreen() {
       primaryButtonText="Ingresar →"
       primaryButtonColor={colors.gold}
       secondaryButtonText="Crear cuenta nueva"
-      footerText="¿Ya tienes cuenta?"
-      footerActionText="Inicia sesión"
       footerSecondaryText="¿Dueño de restaurante?"
       footerSecondaryActionText="Accede aquí →"
+      footerSecondaryActionColor={colors.teal}
       onPrimaryPress={() => console.log('User login pressed')}
       onSecondaryPress={() => console.log('Create account pressed')}
-      onFooterActionPress={() => console.log('Login pressed')}
       onFooterSecondaryActionPress={() => console.log('Restaurant access pressed')}
     />
   );

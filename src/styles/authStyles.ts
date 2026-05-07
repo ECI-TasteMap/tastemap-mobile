@@ -1,4 +1,4 @@
-import { StyleSheet, Platform } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
@@ -14,16 +14,18 @@ export const authStyles = StyleSheet.create({
   },
 
   header: {
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.xxl,
     alignItems: 'center',
     borderBottomLeftRadius: radius.xl,
     borderBottomRightRadius: radius.xl,
+    minHeight: 220,
+    justifyContent: 'center',
   },
 
   tasteMapTitle: {
     fontSize: 32,
     fontWeight: 'bold',
+    fontFamily: 'serif',
     color: colors.textPrimary,
     marginBottom: spacing.md,
     letterSpacing: 1,
@@ -39,6 +41,7 @@ export const authStyles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 14,
     color: colors.textSecondary,
+    fontFamily: 'sans-serif-medium',
     letterSpacing: 0.5,
   },
 
@@ -50,6 +53,7 @@ export const authStyles = StyleSheet.create({
   badge: {
     fontSize: 11,
     color: colors.textMuted,
+    fontFamily: 'sans-serif-medium',
     letterSpacing: 2,
     fontWeight: '600',
   },
@@ -63,6 +67,7 @@ export const authStyles = StyleSheet.create({
   mainTitle: {
     fontSize: 24,
     fontWeight: 'bold',
+    fontFamily: 'serif',
     color: colors.textPrimary,
     marginBottom: spacing.xs,
   },
@@ -70,6 +75,7 @@ export const authStyles = StyleSheet.create({
   mainSubtitle: {
     fontSize: 14,
     color: colors.textSecondary,
+    fontFamily: 'sans-serif-medium',
     marginBottom: spacing.xl,
   },
 
@@ -80,6 +86,7 @@ export const authStyles = StyleSheet.create({
   inputLabel: {
     fontSize: 12,
     color: colors.textMuted,
+    fontFamily: 'sans-serif-medium',
     fontWeight: '600',
     marginBottom: spacing.sm,
     letterSpacing: 0.5,
@@ -94,7 +101,7 @@ export const authStyles = StyleSheet.create({
     paddingVertical: spacing.md,
     color: colors.textPrimary,
     fontSize: 14,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: 'sans-serif-medium',
   },
 
   textInputPlaceholder: {
@@ -104,20 +111,34 @@ export const authStyles = StyleSheet.create({
   primaryButton: {
     backgroundColor: colors.gold,
     borderRadius: radius.md,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.lg,
     marginBottom: spacing.md,
+    elevation: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+
+  primaryButtonGold: {
+    elevation: 6,
+    shadowColor: colors.gold,
+    shadowOpacity: 0.2,
   },
 
   primaryButtonGreen: {
-    backgroundColor: colors.green,
+    elevation: 6,
+    shadowColor: colors.green,
+    shadowOpacity: 0.2,
   },
 
   primaryButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'sans-serif-medium',
     color: colors.background,
     letterSpacing: 0.5,
   },
@@ -137,6 +158,7 @@ export const authStyles = StyleSheet.create({
   dividerText: {
     marginHorizontal: spacing.md,
     color: colors.textMuted,
+    fontFamily: 'sans-serif-medium',
     fontSize: 12,
   },
 
@@ -152,6 +174,7 @@ export const authStyles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: 14,
     color: colors.textPrimary,
+    fontFamily: 'sans-serif-medium',
     fontWeight: '500',
   },
 
@@ -164,11 +187,13 @@ export const authStyles = StyleSheet.create({
   footerText: {
     textAlign: 'center',
     color: colors.textMuted,
+    fontFamily: 'sans-serif-medium',
     fontSize: 12,
   },
 
   footerActionText: {
     color: colors.teal,
+    fontFamily: 'sans-serif-medium',
     fontWeight: '600',
   },
 
