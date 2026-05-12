@@ -72,7 +72,7 @@ export default function LoginTemplate({
     if (onPrimaryPress) {
       onPrimaryPress();
     } else {
-      console.log(`${mode} login: email=${email}, password=${password}`);
+      console.log(`${mode} login attempt`);
     }
   };
 

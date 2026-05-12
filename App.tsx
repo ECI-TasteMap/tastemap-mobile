@@ -1,14 +1,26 @@
 import { StatusBar } from 'expo-status-bar';
+import { StyleSheet, View } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-// import UserLoginScreen from './src/screens/UserLoginScreen';
-import RestaurantLoginScreen from './src/screens/RestaurantLoginScreen';
+import RestaurantBottomNavBar from './src/components/RestaurantBottomNavBar';
 
 export default function App() {
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
-      {/* <UserLoginScreen /> */}
-      <RestaurantLoginScreen />
+      <View style={styles.container}>
+        <StatusBar style="light" />
+        <NavigationContainer>
+          <RestaurantBottomNavBar />
+        </NavigationContainer>
+      </View>
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0C1D32',
+    justifyContent: 'flex-end',
+  },
+});
