@@ -1,7 +1,12 @@
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+import apiClient from './apiClient';
+import { Restaurant } from '../../types/restaurant';
 
-export const getRestaurants = async () => {
-  const response = await fetch(`${BASE_URL}/api/v1/restaurants`);
-  if (!response.ok) throw new Error('Error al obtener restaurantes');
-  return response.json();
-};
+export async function getRestaurants(): Promise<Restaurant[]> {
+  const response = await apiClient.get<Restaurant[]>('/api/v1/restaurants');
+  return response.data;
+}
+
+export async function getRestaurantById(restaurantId: string): Promise<Restaurant> {
+  const response = await apiClient.get<Restaurant>(`/api/v1/restaurants/${restaurantId}`);
+  return response.data;
+}

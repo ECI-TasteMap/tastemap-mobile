@@ -1,15 +1,19 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
-import BottomNavBar from './src/components/BottomNavBar';
-import HomeScreen from './src/screens/HomeScreen';
+import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import RestaurantBottomNavBar from './src/components/RestaurantBottomNavBar';
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <StatusBar style="light" />
-      <HomeScreen />
-      <BottomNavBar />
-    </View>
+    <SafeAreaProvider>
+      <View style={styles.container}>
+        <StatusBar style="light" />
+        <NavigationContainer>
+          <RestaurantBottomNavBar />
+        </NavigationContainer>
+      </View>
+    </SafeAreaProvider>
   );
 }
 
