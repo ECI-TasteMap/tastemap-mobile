@@ -1,6 +1,8 @@
 export const colors = {
   background: '#0C1D32',
   bottomNavBackground: '#091727',
+  headerNavy: '#132B49',
+  restaurantHeaderGreen: '#123B1F',
   gold: '#c9a96e',
   orange: '#FF6B35',
   card: '#132238',
@@ -11,4 +13,6 @@ export const colors = {
   textMuted: 'rgba(255, 255, 255, 0.5)',
   success: '#4CAF50',
   error: '#F44336',
+  teal: '#2DD4BF',
+  green: '#34A853',
 } as const;
