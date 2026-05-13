@@ -1,7 +1,13 @@
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+import apiClient from './apiClient';
 
-export const getUserById = async (id: string) => {
-  const response = await fetch(`${BASE_URL}/users/${id}`);
-  if (!response.ok) throw new Error('Error al obtener usuario');
-  return response.json();
-};
+export interface UserProfile {
+  id: string;
+  fullname: string;
+  email: string;
+  role: string;
+}
+
+export async function getUserById(id: string): Promise<UserProfile> {
+  const response = await apiClient.get<UserProfile>(`/api/v1/users/${id}`);
+  return response.data;
+}

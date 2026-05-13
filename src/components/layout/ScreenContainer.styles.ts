@@ -11,4 +11,7 @@ export const screenContainerStyles = StyleSheet.create({
     flex: 1,
     padding: spacing.screen,
   },
+  contentNoPadding: {
+    padding: 0,
+  },
 });

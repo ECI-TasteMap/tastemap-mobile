@@ -1,28 +1,34 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ScrollView,
+  FlatList,
   StyleSheet,
   View,
   Text,
   TextInput,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
+  Animated,
 } from 'react-native';
-import { getRestaurants } from '../services/api/restaurantService';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { CompositeNavigationProp } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useRestaurants } from '../hooks/useRestaurants';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { radius } from '../theme/radius';
+import { typography } from '../theme/typography';
+import type { Restaurant } from '../types/restaurant';
+import type { UserTabParamList, UserStackParamList } from '../navigation/types';
 
-const getEmoji = (theme: string) => {
-  const emojis: any = {
-    anime: '🍣',
-    italiano: '🍝',
-    americano: '🍔',
-    saludable: '🥗',
-    mexicano: '🌮',
-    mariscos: '🦞',
-    cafe: '☕',
-  };
-  return emojis[theme] || '🍽️';
-};
+type HomeNav = CompositeNavigationProp<
+  BottomTabNavigationProp<UserTabParamList, 'Home'>,
+  NativeStackNavigationProp<UserStackParamList>
+>;
 
 const getPrecio = (min: number) => {
   if (min < 20000) return '$';
@@ -31,35 +37,123 @@ const getPrecio = (min: number) => {
   return '$$$$';
 };
 
-const planes = [
+const PLANES = [
   { id: 'romantico', label: 'Romántico', emoji: '👫❤️' },
   { id: 'familiar', label: 'Familiar', emoji: '👨‍👩‍👧' },
   { id: 'casual', label: 'Casual', emoji: '☕' },
   { id: 'negocios', label: 'Negocios', emoji: '💼' },
 ];
 
+function RestaurantCardHorizontal({
+  item,
+  onPress,
+}: {
+  item: Restaurant;
+  onPress: () => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const onPressIn = () =>
+    Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 50 }).start();
+  const onPressOut = () =>
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 50 }).start();
+
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        style={styles.restaurantCard}
+      >
+        <View style={styles.restaurantImagen}>
+          {item.logo ? (
+            <Image
+              source={{ uri: item.logo }}
+              style={{ width: '100%', height: '100%' }}
+              defaultSource={require('../../assets/icon.png')}
+            />
+          ) : (
+            <Ionicons name="restaurant" size={36} color={colors.gold} />
+          )}
+          <View style={styles.precioBadge}>
+            <Text style={styles.precioTexto}>{getPrecio(item.priceMin)}</Text>
+          </View>
+        </View>
+        <Text style={styles.restaurantNombre} numberOfLines={1}>
+          {item.name}
+        </Text>
+        <Text style={styles.restaurantSub} numberOfLines={1}>
+          {item.tags[0]} · {item.locations[0]}
+        </Text>
+        <View style={styles.restaurantFooter}>
+          <Text style={styles.rating}>★ 4.5</Text>
+          <Text style={styles.distancia}>~1 km</Text>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+function PopularRow({ item, onPress }: { item: Restaurant; onPress: () => void }) {
+  return (
+    <TouchableOpacity activeOpacity={0.75} onPress={onPress} style={styles.popularCard}>
+      <View style={styles.popularImagen}>
+        {item.logo ? (
+          <Image source={{ uri: item.logo }} style={styles.popularImagen} />
+        ) : (
+          <Ionicons name="restaurant" size={24} color={colors.gold} />
+        )}
+      </View>
+      <View style={styles.popularInfo}>
+        <Text style={styles.restaurantNombre} numberOfLines={1}>
+          {item.name}
+        </Text>
+        <Text style={styles.restaurantSub} numberOfLines={1}>
+          {item.tags[0]} · {getPrecio(item.priceMin)}
+        </Text>
+      </View>
+      <View style={styles.popularDerecha}>
+        <Text style={styles.rating}>★ 4.5</Text>
+        <Text style={styles.distancia}>~1 km</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export default function HomeScreen() {
+  const navigation = useNavigation<HomeNav>();
+  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [categoriaActiva, setCategoriaActiva] = useState('');
   const [planActivo, setPlanActivo] = useState('');
-  const [restaurantes, setRestaurantes] = useState<any[]>([]);
-  const [cargando, setCargando] = useState(true);
 
-  useEffect(() => {
-    getRestaurants()
-      .then((data) => setRestaurantes(data))
-      .catch((err) => console.error(err))
-      .finally(() => setCargando(false));
-  }, []);
+  const { data: restaurantes = [], isLoading } = useRestaurants();
 
-  const categorias = [...new Set(restaurantes.flatMap((r: any) => r.tags))];
+  const categorias = [...new Set(restaurantes.flatMap((r) => r.tags))];
+
+  const filtrados =
+    categoriaActiva
+      ? restaurantes.filter((r) => r.tags.includes(categoriaActiva))
+      : restaurantes;
+
+  const cercanos = filtrados.slice(0, 4);
+  const populares = filtrados.slice(4);
+
+  const goToDetail = (id: string) =>
+    navigation.navigate('RestaurantDetail', { restaurantId: id });
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingTop: insets.top }}
+      showsVerticalScrollIndicator={false}
+    >
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.direccion}>📍 Bogotá, Colombia</Text>
-        <Text style={styles.bienvenida}>Hola, María</Text>
+        <Text style={styles.bienvenida}>Hola, bienvenido</Text>
         <Text style={styles.bienvenida}>¿Dónde comemos?</Text>
       </View>
 
@@ -74,36 +168,45 @@ export default function HomeScreen() {
             onChangeText={setQuery}
           />
         </View>
-        <TouchableOpacity onPress={() => {}} style={styles.searchButtomContainer}>
-          <Ionicons name="arrow-forward" size={24} color="#ffffff" />
+        <TouchableOpacity activeOpacity={0.8} style={styles.searchBtn}>
+          <Ionicons name="arrow-forward" size={22} color="#ffffff" />
         </TouchableOpacity>
       </View>
 
       {/* Categorías */}
-      <View style={styles.seccion}>
-        <Text style={styles.seccionTitulo}>Explorar</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {categorias.map((cat) => (
+      {categorias.length > 0 && (
+        <View style={styles.seccion}>
+          <Text style={styles.seccionTitulo}>Explorar</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <TouchableOpacity
-              key={cat}
-              style={[styles.chip, categoriaActiva === cat && styles.chipActivo]}
-              onPress={() => setCategoriaActiva(cat)}
+              style={[styles.chip, categoriaActiva === '' && styles.chipActivo]}
+              onPress={() => setCategoriaActiva('')}
             >
-              <Text style={styles.chipTexto}>{cat}</Text>
+              <Text style={styles.chipTexto}>Todos</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+            {categorias.map((cat) => (
+              <TouchableOpacity
+                key={cat}
+                style={[styles.chip, categoriaActiva === cat && styles.chipActivo]}
+                onPress={() => setCategoriaActiva(cat)}
+              >
+                <Text style={styles.chipTexto}>{cat}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Planes */}
       <View style={styles.seccion}>
         <Text style={styles.seccionTitulo}>¿Cuál es tu plan?</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {planes.map((plan) => (
+          {PLANES.map((plan) => (
             <TouchableOpacity
               key={plan.id}
+              activeOpacity={0.8}
               style={[styles.planCard, planActivo === plan.id && styles.planCardActivo]}
-              onPress={() => setPlanActivo(plan.id)}
+              onPress={() => setPlanActivo(planActivo === plan.id ? '' : plan.id)}
             >
               <Text style={styles.planEmoji}>{plan.emoji}</Text>
               <Text style={styles.planLabel}>{plan.label}</Text>
@@ -116,64 +219,45 @@ export default function HomeScreen() {
       <View style={styles.seccion}>
         <View style={styles.seccionHeader}>
           <Text style={styles.seccionTitulo}>Cerca de ti</Text>
-          <TouchableOpacity>
-            <Text style={styles.verTodo}>Ver todo</Text>
-          </TouchableOpacity>
+          {/* TODO: navigate to full list when SearchScreen supports filters */}
         </View>
-        {cargando ? (
-          <Text style={styles.restaurantSub}>Cargando...</Text>
+        {isLoading ? (
+          <ActivityIndicator color={colors.gold} style={{ marginTop: 12 }} />
         ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {restaurantes.slice(0, 4).map((r: any) => (
-              <TouchableOpacity key={r.id} style={styles.restaurantCard}>
-                <View style={styles.restaurantImagen}>
-                  <Image source={{ uri: r.logo }} style={{ width: '100%', height: '100%' }} />
-                  <View style={styles.precioBadge}>
-                    <Text style={styles.precioTexto}>{getPrecio(r.priceMin)}</Text>
-                  </View>
-                </View>
-                <Text style={styles.restaurantNombre}>{r.name}</Text>
-                <Text style={styles.restaurantSub}>
-                  {r.tags[0]} · {r.locations[0]}
-                </Text>
-                <View style={styles.restaurantFooter}>
-                  <Text style={styles.rating}>★ 4.5</Text>
-                  <Text style={styles.distancia}>~1 km</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <FlatList
+            horizontal
+            data={cercanos}
+            keyExtractor={(item) => item.id}
+            showsHorizontalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <RestaurantCardHorizontal item={item} onPress={() => goToDetail(item.id)} />
+            )}
+            ListEmptyComponent={
+              <Text style={styles.restaurantSub}>No hay restaurantes disponibles.</Text>
+            }
+          />
         )}
       </View>
 
       {/* Más populares */}
-      <View style={styles.seccion}>
+      <View style={[styles.seccion, { marginBottom: 32 }]}>
         <View style={styles.seccionHeader}>
           <Text style={styles.seccionTitulo}>Más populares</Text>
-          <TouchableOpacity>
-            <Text style={styles.verTodo}>Ver todo</Text>
-          </TouchableOpacity>
         </View>
-        {cargando ? (
-          <Text style={styles.restaurantSub}>Cargando...</Text>
+        {isLoading ? (
+          <ActivityIndicator color={colors.gold} style={{ marginTop: 12 }} />
         ) : (
-          restaurantes.slice(4).map((r: any) => (
-            <TouchableOpacity key={r.id} style={styles.popularCard}>
-              <View style={[styles.popularImagen, { backgroundColor: '#1B2C3E' }]}>
-                <Image source={{ uri: r.logo }} style={styles.popularImagen} />
-              </View>
-              <View style={styles.popularInfo}>
-                <Text style={styles.restaurantNombre}>{r.name}</Text>
-                <Text style={styles.restaurantSub}>
-                  {r.tags[0]} · {getPrecio(r.priceMin)}
-                </Text>
-              </View>
-              <View style={styles.popularDerecha}>
-                <Text style={styles.rating}>★ 4.5</Text>
-                <Text style={styles.distancia}>~1 km</Text>
-              </View>
-            </TouchableOpacity>
-          ))
+          <FlatList
+            data={populares}
+            keyExtractor={(item) => item.id}
+            scrollEnabled={false}
+            renderItem={({ item }) => (
+              <PopularRow item={item} onPress={() => goToDetail(item.id)} />
+            )}
+            ListEmptyComponent={
+              <Text style={styles.restaurantSub}>No hay más restaurantes.</Text>
+            }
+          />
         )}
       </View>
     </ScrollView>
@@ -181,90 +265,92 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0C1D32', padding: 20, paddingVertical: 0 },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.screen,
+    paddingVertical: 0,
+  },
+  header: { padding: spacing.sm, paddingTop: spacing.md },
   direccion: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    marginTop: 20,
-    fontFamily: 'serif',
+    color: colors.textPrimary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+    marginBottom: spacing.xl,
+    fontFamily: typography.fontFamily.serif,
   },
   bienvenida: {
-    color: '#FFFFFF',
-    fontFamily: 'serif',
-    fontSize: 27,
-    fontWeight: '700',
+    color: colors.textPrimary,
+    fontFamily: typography.fontFamily.serif,
+    fontSize: typography.size.xxl,
+    fontWeight: typography.weight.bold,
     fontStyle: 'italic',
   },
-  header: { padding: 10 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xl },
   searchContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 13,
+    borderRadius: radius.md,
     backgroundColor: '#1B2C3E',
     borderColor: '#7F8488',
     borderWidth: 0.5,
-    width: '80%',
   },
   input: {
-    padding: 8,
-    fontSize: 16,
-    fontWeight: 'bold',
-    fontFamily: 'sans-serif-medium',
-    color: '#fff',
+    flex: 1,
+    padding: spacing.sm,
+    fontSize: typography.size.base,
+    fontFamily: typography.fontFamily.body,
+    color: colors.textPrimary,
   },
-  searchButtomContainer: {
-    justifyContent: 'center',
-    flexDirection: 'row',
+  searchBtn: {
     alignItems: 'center',
-    borderRadius: 13,
-    backgroundColor: '#c9a96e',
-    width: '15%',
-    height: 40,
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    backgroundColor: colors.gold,
+    width: 44,
+    height: 44,
   },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 20 },
-  seccion: { marginTop: 30 },
+  seccion: { marginTop: spacing.xxl + spacing.sm },
   seccionTitulo: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    fontFamily: 'serif',
+    color: colors.textPrimary,
+    fontSize: typography.size.lg,
+    fontWeight: typography.weight.bold,
+    marginBottom: spacing.md,
+    fontFamily: typography.fontFamily.serif,
   },
   seccionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: spacing.md,
   },
-  verTodo: { color: '#c9a96e', fontSize: 13, fontFamily: 'sans-serif-medium' },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.round,
     backgroundColor: '#1B2C3E',
-    marginRight: 10,
+    marginRight: spacing.sm,
   },
-  chipActivo: { backgroundColor: '#c9a96e' },
-  chipTexto: { color: '#fff', fontSize: 13, fontFamily: 'sans-serif-medium' },
+  chipActivo: { backgroundColor: colors.gold },
+  chipTexto: { color: colors.textPrimary, fontSize: typography.size.sm, fontFamily: typography.fontFamily.body },
   planCard: {
     width: 100,
     height: 100,
-    borderRadius: 16,
+    borderRadius: radius.lg,
     backgroundColor: '#1B2C3E',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: spacing.md,
   },
-  planCardActivo: { backgroundColor: '#c9a96e' },
-  planEmoji: { fontSize: 30, marginBottom: 8 },
-  planLabel: { color: '#fff', fontSize: 13, fontFamily: 'sans-serif-medium' },
+  planCardActivo: { backgroundColor: colors.gold },
+  planEmoji: { fontSize: 28, marginBottom: spacing.sm },
+  planLabel: { color: colors.textPrimary, fontSize: typography.size.sm, fontFamily: typography.fontFamily.body },
   restaurantCard: {
     width: 160,
-    marginRight: 14,
+    marginRight: spacing.md,
     backgroundColor: '#1B2C3E',
-    borderRadius: 16,
+    borderRadius: radius.lg,
     overflow: 'hidden',
   },
   restaurantImagen: {
@@ -273,55 +359,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  restaurantEmoji: { fontSize: 48 },
   precioBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: spacing.sm,
+    right: spacing.sm,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 8,
+    borderRadius: radius.sm,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  precioTexto: { color: '#fff', fontSize: 11, fontFamily: 'sans-serif-medium' },
+  precioTexto: { color: colors.textPrimary, fontSize: typography.size.xs, fontFamily: typography.fontFamily.body },
   restaurantNombre: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-    fontFamily: 'serif',
-    margin: 10,
+    color: colors.textPrimary,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+    fontFamily: typography.fontFamily.serif,
+    margin: spacing.sm,
     marginBottom: 2,
   },
   restaurantSub: {
     color: 'rgba(240,234,220,0.5)',
-    fontSize: 11,
-    marginHorizontal: 10,
-    fontFamily: 'sans-serif-medium',
+    fontSize: typography.size.xs,
+    marginHorizontal: spacing.sm,
+    fontFamily: typography.fontFamily.body,
   },
   restaurantFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    margin: 10,
-    marginTop: 6,
+    margin: spacing.sm,
+    marginTop: spacing.xs,
   },
-  rating: { color: '#c9a96e', fontSize: 12, fontFamily: 'sans-serif-medium' },
-  distancia: { color: '#4dd9c0', fontSize: 12, fontFamily: 'sans-serif-medium' },
+  rating: { color: colors.gold, fontSize: typography.size.xs, fontFamily: typography.fontFamily.body },
+  distancia: { color: colors.teal, fontSize: typography.size.xs, fontFamily: typography.fontFamily.body },
   popularCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1B2C3E',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
   },
   popularImagen: {
     width: 56,
     height: 56,
-    borderRadius: 12,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: spacing.md,
+    backgroundColor: '#2a3f55',
   },
   popularInfo: { flex: 1 },
-  popularDerecha: { alignItems: 'flex-end', gap: 4 },
+  popularDerecha: { alignItems: 'flex-end', gap: spacing.xs },
 });

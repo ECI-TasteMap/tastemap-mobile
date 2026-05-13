@@ -6,19 +6,25 @@ import { screenContainerStyles as styles } from './ScreenContainer.styles';
 interface ScreenContainerProps {
   children: ReactNode;
   style?: ViewStyle;
+  contentStyle?: ViewStyle;
   useSafeArea?: boolean;
+  noPadding?: boolean;
 }
 
 export default function ScreenContainer({
   children,
   style,
+  contentStyle,
   useSafeArea = true,
-}: ScreenContainerProps) {
+  noPadding = false,
+}: Readonly<ScreenContainerProps>) {
   const Container = useSafeArea ? SafeAreaView : View;
 
   return (
     <Container style={[styles.container, style]}>
-      <View style={styles.content}>{children}</View>
+      <View style={[styles.content, noPadding && styles.contentNoPadding, contentStyle]}>
+        {children}
+      </View>
     </Container>
   );
 }

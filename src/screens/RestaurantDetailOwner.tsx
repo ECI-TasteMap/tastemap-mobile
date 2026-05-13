@@ -96,7 +96,7 @@ export default function RestaurantDetailOwner({
   const cuisineTag = restaurant.theme || restaurant.tags?.[0] || 'Restaurante';
 
   return (
-    <ScreenContainer style={styles.container}>
+    <ScreenContainer noPadding>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Hero Section */}
         <View style={styles.heroSection}>

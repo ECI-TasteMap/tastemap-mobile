@@ -1,26 +1,27 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import RestaurantBottomNavBar from './src/components/RestaurantBottomNavBar';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import AppNavigator from './src/navigation/AppNavigator';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+    },
+  },
+});
 
 export default function App() {
   return (
     <SafeAreaProvider>
-      <View style={styles.container}>
-        <StatusBar style="light" />
+      <QueryClientProvider client={queryClient}>
         <NavigationContainer>
-          <RestaurantBottomNavBar />
+          <StatusBar style="light" />
+          <AppNavigator />
         </NavigationContainer>
-      </View>
+      </QueryClientProvider>
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#3a71b4',
-    justifyContent: 'flex-end',
-  },
-});

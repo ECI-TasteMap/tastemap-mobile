@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,71 +7,63 @@ import {
   Image,
   ActivityIndicator,
   Linking,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import ScreenContainer from '../components/layout/ScreenContainer';
-import { RestaurantDetail } from '../types/restaurant';
-import { getRestaurantById } from '../services/api/restaurantService';
+import { useRestaurantById } from '../hooks/useRestaurantById';
 import { restaurantDetailMock, sampleRestaurant } from '../mocks/restaurantDetailMock';
 import { parseMenuField } from '../utils/menuParser';
 import { restaurantDetailStyles as styles } from './RestaurantDetailScreen.styles';
+import { colors } from '../theme/colors';
+import type { UserStackParamList } from '../navigation/types';
+import type { RestaurantDetail } from '../types/restaurant';
 
-interface RestaurantDetailScreenProps {
-  restaurantId?: string;
-}
+type Props = NativeStackScreenProps<UserStackParamList, 'RestaurantDetail'>;
 
-export default function RestaurantDetailScreen({
-  restaurantId = '1',
-}: RestaurantDetailScreenProps) {
-  const [restaurant, setRestaurant] = useState<RestaurantDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default function RestaurantDetailScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<UserStackParamList>>();
+  const route = useRoute<Props['route']>();
+  const { restaurantId } = route.params;
+
   const [isFavorite, setIsFavorite] = useState(false);
 
-  useEffect(() => {
-    loadRestaurant();
-  }, [restaurantId]);
+  const { data: apiData, isLoading, isError } = useRestaurantById(restaurantId);
 
-  const loadRestaurant = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await getRestaurantById(restaurantId);
-      const restaurantDetail: RestaurantDetail = {
-        ...data,
-        ...restaurantDetailMock,
-      };
-      setRestaurant(restaurantDetail);
-    } catch (err) {
-      console.error('Failed to load restaurant:', err);
-      setError('No se pudo cargar el restaurante');
-      // Use sample restaurant for development
-      const restaurantDetail: RestaurantDetail = {
-        ...sampleRestaurant,
-        ...restaurantDetailMock,
-      } as RestaurantDetail;
-      setRestaurant(restaurantDetail);
-    } finally {
-      setLoading(false);
+  let restaurant: RestaurantDetail | null = null;
+  if (apiData) {
+    restaurant = { ...apiData, ...restaurantDetailMock };
+  } else if (isError) {
+    restaurant = { ...sampleRestaurant, ...restaurantDetailMock };
+  }
+
+  const handleReservation = () => {
+    if (!restaurant) return;
+    if (restaurant.reservationUrl) {
+      Linking.openURL(restaurant.reservationUrl).catch(() =>
+        Alert.alert('Error', 'No se pudo abrir el enlace de reserva.')
+      );
+    } else {
+      Alert.alert(
+        'Sin enlace de reserva',
+        'Este restaurante aún no tiene un enlace de reserva disponible.'
+      );
     }
   };
 
-  const handleReservation = () => {
-    // TODO: Navigate to reservation flow
-    console.log('Reservation button pressed');
-  };
-
   const handleOpenMenu = (url: string) => {
-    Linking.openURL(url).catch(() => {
-      console.error('Failed to open menu URL');
-    });
+    Linking.openURL(url).catch(() =>
+      Alert.alert('Error', 'No se pudo abrir el menú.')
+    );
   };
 
-  if (loading && !restaurant) {
+  if (isLoading && !restaurant) {
     return (
-      <ScreenContainer>
+      <ScreenContainer noPadding>
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#c9a96e" />
+          <ActivityIndicator size="large" color={colors.gold} />
           <Text style={styles.loadingText}>Cargando restaurante...</Text>
         </View>
       </ScreenContainer>
@@ -80,11 +72,11 @@ export default function RestaurantDetailScreen({
 
   if (!restaurant) {
     return (
-      <ScreenContainer>
+      <ScreenContainer noPadding>
         <View style={styles.centerContainer}>
           <Text style={styles.errorText}>No se pudo cargar el restaurante</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadRestaurant}>
-            <Text style={styles.retryButtonText}>Reintentar</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.retryButtonText}>Volver</Text>
           </TouchableOpacity>
         </View>
       </ScreenContainer>
@@ -93,20 +85,18 @@ export default function RestaurantDetailScreen({
 
   const location = restaurant.locations?.[0] || 'Dirección no disponible';
   const parsedMenu = parseMenuField(restaurant.menu);
-  const priceLabel = `$${restaurant.priceMin.toLocaleString()} - $$${restaurant.priceMax.toLocaleString()}`;
+  const priceLabel = `$${restaurant.priceMin.toLocaleString()} - $${restaurant.priceMax.toLocaleString()}`;
   const cuisineTag = restaurant.theme || restaurant.tags?.[0] || 'Restaurante';
 
   return (
-    <ScreenContainer style={styles.container}>
+    <ScreenContainer noPadding>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero Section */}
+        {/* Hero */}
         <View style={styles.heroSection}>
-          {/* Back Button */}
-          <TouchableOpacity style={styles.backButton}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Ionicons name="chevron-back" size={28} color="#fff" />
           </TouchableOpacity>
 
-          {/* Favorite Button */}
           <TouchableOpacity
             style={styles.favoriteButton}
             onPress={() => setIsFavorite(!isFavorite)}
@@ -114,28 +104,26 @@ export default function RestaurantDetailScreen({
             <Ionicons
               name={isFavorite ? 'heart' : 'heart-outline'}
               size={24}
-              color={isFavorite ? '#FF6B35' : '#fff'}
+              color={isFavorite ? colors.orange : '#fff'}
             />
           </TouchableOpacity>
 
-          {/* Restaurant Logo */}
           <View style={styles.logoContainer}>
             {restaurant.logo ? (
               <Image source={{ uri: restaurant.logo }} style={styles.logo} />
             ) : (
               <View style={styles.logoFallback}>
-                <Ionicons name="restaurant" size={80} color="#c9a96e" />
+                <Ionicons name="restaurant" size={80} color={colors.gold} />
               </View>
             )}
           </View>
         </View>
 
-        {/* Content Section */}
+        {/* Content */}
         <View style={styles.contentSection}>
-          {/* Restaurant Name */}
           <Text style={styles.restaurantName}>{restaurant.name}</Text>
 
-          {/* Badges Row */}
+          {/* Badges */}
           <View style={styles.badgesRow}>
             <View style={styles.badge}>
               <Ionicons name="restaurant" size={14} color="#fff" />
@@ -146,20 +134,20 @@ export default function RestaurantDetailScreen({
               <Text style={styles.badgeText}>{restaurant.isOpen ? 'Abierto' : 'Cerrado'}</Text>
             </View>
             <View style={styles.badge}>
-              <Ionicons name="cash" size={14} color="#c9a96e" />
+              <Ionicons name="cash" size={14} color={colors.gold} />
               <Text style={[styles.badgeText, styles.badgePriceText]}>{priceLabel}</Text>
             </View>
           </View>
 
-          {/* Rating Row */}
+          {/* Rating */}
           <View style={styles.ratingRow}>
             <View style={styles.starsContainer}>
-              {[...Array(5)].map((_, i) => (
+              {([1, 2, 3, 4, 5] as const).map((pos) => (
                 <Ionicons
-                  key={i}
-                  name={i < Math.floor(restaurant.averageRating) ? 'star' : 'star-outline'}
+                  key={`star-${pos}`}
+                  name={pos <= Math.floor(restaurant.averageRating) ? 'star' : 'star-outline'}
                   size={16}
-                  color="#c9a96e"
+                  color={colors.gold}
                   style={{ marginRight: 2 }}
                 />
               ))}
@@ -168,43 +156,35 @@ export default function RestaurantDetailScreen({
             <Text style={styles.reviewCountText}>· {restaurant.reviewCount} reseñas</Text>
           </View>
 
-          {/* Description */}
           <Text style={styles.description}>{restaurant.description}</Text>
 
-          {/* Info Cards Grid */}
+          {/* Info Grid */}
           <View style={styles.infoGrid}>
-            {/* Address Card */}
             <View style={styles.infoCard}>
-              <Ionicons name="location" size={20} color="#c9a96e" />
+              <Ionicons name="location" size={20} color={colors.gold} />
               <Text style={styles.infoLabel}>DIRECCIÓN</Text>
               <Text style={styles.infoValue}>{location}</Text>
             </View>
-
-            {/* Hours Card */}
             <View style={styles.infoCard}>
-              <Ionicons name="time" size={20} color="#c9a96e" />
+              <Ionicons name="time" size={20} color={colors.gold} />
               <Text style={styles.infoLabel}>HORARIO</Text>
               <Text style={styles.infoValue}>{restaurant.hour || 'Mar-Dom 12:00-22:00'}</Text>
               <Text style={styles.infoExtra}>{restaurant.openUntilLabel}</Text>
             </View>
-
-            {/* Phone Card */}
             <View style={styles.infoCard}>
-              <Ionicons name="call" size={20} color="#c9a96e" />
+              <Ionicons name="call" size={20} color={colors.gold} />
               <Text style={styles.infoLabel}>TELÉFONO</Text>
               <Text style={styles.infoValue}>{restaurant.phone}</Text>
             </View>
-
-            {/* Distance Card */}
             <View style={styles.infoCard}>
-              <Ionicons name="walk" size={20} color="#c9a96e" />
+              <Ionicons name="walk" size={20} color={colors.gold} />
               <Text style={styles.infoLabel}>DISTANCIA</Text>
               <Text style={styles.infoValue}>{restaurant.distanceLabel}</Text>
               <Text style={styles.infoExtra}>{restaurant.estimatedTimeLabel}</Text>
             </View>
           </View>
 
-          {/* Menu Section */}
+          {/* Menu */}
           <View style={styles.menuSection}>
             <Text style={styles.menuTitle}>
               {parsedMenu.type === 'url' ? 'Menú del restaurante' : 'Platos disponibles'}
@@ -212,7 +192,7 @@ export default function RestaurantDetailScreen({
 
             {parsedMenu.type === 'empty' && (
               <View style={styles.menuEmptyState}>
-                <Ionicons name="document-text-outline" size={40} color="#c9a96e" />
+                <Ionicons name="document-text-outline" size={40} color={colors.gold} />
                 <Text style={styles.menuEmptyText}>{parsedMenu.content}</Text>
               </View>
             )}
@@ -223,13 +203,13 @@ export default function RestaurantDetailScreen({
 
             {parsedMenu.type === 'items' && (
               <View style={styles.menuItems}>
-                {parsedMenu.content.map((item, idx) => (
-                  <View key={idx} style={styles.menuItem}>
-                    <Ionicons name="checkmark-circle" size={16} color="#c9a96e" />
+                {parsedMenu.content.map((item) => (
+                  <View key={item.name} style={styles.menuItem}>
+                    <Ionicons name="checkmark-circle" size={16} color={colors.gold} />
                     <View style={styles.menuItemContent}>
                       <Text style={styles.menuItemName}>{item.name}</Text>
                     </View>
-                    {item.price && (
+                    {item.price !== undefined && (
                       <Text style={styles.menuItemPrice}>${item.price.toLocaleString()}</Text>
                     )}
                   </View>
@@ -237,10 +217,10 @@ export default function RestaurantDetailScreen({
               </View>
             )}
 
-            {parsedMenu.type === 'url' && parsedMenu.displayUrl && (
+            {parsedMenu.type === 'url' && Boolean(parsedMenu.displayUrl) && (
               <TouchableOpacity
                 style={styles.menuUrlButton}
-                onPress={() => handleOpenMenu(parsedMenu.displayUrl!)}
+                onPress={() => handleOpenMenu(parsedMenu.displayUrl)}
               >
                 <Ionicons name="document" size={20} color="#fff" />
                 <Text style={styles.menuUrlButtonText}>Abrir menú</Text>
@@ -249,13 +229,12 @@ export default function RestaurantDetailScreen({
             )}
           </View>
 
-          {/* Reservation Button */}
+          {/* Reservation */}
           <TouchableOpacity style={styles.reservationButton} onPress={handleReservation}>
             <Ionicons name="calendar" size={20} color="#fff" />
             <Text style={styles.reservationButtonText}>Reservar mesa</Text>
           </TouchableOpacity>
 
-          {/* Bottom spacing for scroll */}
           <View style={styles.bottomSpacer} />
         </View>
       </ScrollView>

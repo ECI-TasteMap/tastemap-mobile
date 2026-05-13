@@ -6,19 +6,20 @@ export interface Restaurant {
   ownerId: string;
   name: string;
   description: string;
-  logo?: string; // URL to restaurant logo or fallback
+  logo?: string;
   menu: string; // Plain text, comma/semicolon separated items, URL, or PDF link
-  theme?: string; // e.g., 'Italiana', 'Mexicana', etc.
+  theme?: string;
   locations: string[];
-  tags: string[]; // e.g., ['Auténtica', 'Pastas artesanales']
+  tags: string[];
   priceMin: number;
   priceMax: number;
-  hour?: string; // Opening/closing hours if available from backend
+  hour?: string;
+  // TODO: add reservationUrl to backend DTO (GET /api/v1/restaurants/:id)
+  reservationUrl?: string;
 }
 
 /**
- * Mock-specific data for restaurant detail screen
- * This data doesn't come from the backend yet
+ * Mock-only fields not yet available from the backend
  */
 export interface RestaurantDetailMock {
   averageRating: number;
@@ -31,6 +32,6 @@ export interface RestaurantDetailMock {
 }
 
 /**
- * Combined restaurant detail with mock data
+ * Combined restaurant detail (API data + mock data for missing fields)
  */
 export interface RestaurantDetail extends Restaurant, RestaurantDetailMock {}

@@ -1,8 +1,20 @@
 import React from 'react';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import LoginTemplate from '../components/LoginTemplate';
 import { colors } from '../theme/colors';
+import { useAuthStore } from '../store/authStore';
+import type { AuthStackParamList } from '../navigation/types';
+
+type Nav = NativeStackNavigationProp<AuthStackParamList, 'RestaurantLogin'>;
 
 export default function RestaurantLoginScreen() {
+  const navigation = useNavigation<Nav>();
+  const setRole = useAuthStore((s) => s.setRole);
+
+  // TODO: Replace with real auth call to POST /api/v1/auth/restaurant/login when ready
+  const handleLogin = () => setRole('restaurant');
+
   return (
     <LoginTemplate
       mode="restaurant"
@@ -22,9 +34,11 @@ export default function RestaurantLoginScreen() {
       footerText="¿Eres cliente?"
       footerActionText="App de usuario →"
       footerActionColor={colors.teal}
-      onPrimaryPress={() => console.log('Restaurant login pressed')}
-      onSecondaryPress={() => console.log('Register restaurant pressed')}
-      onFooterActionPress={() => console.log('User app access pressed')}
+      onPrimaryPress={handleLogin}
+      onSecondaryPress={() => {
+        // TODO: Navigate to RestaurantNewLocal or register flow when ready
+      }}
+      onFooterActionPress={() => navigation.navigate('UserLogin')}
     />
   );
 }

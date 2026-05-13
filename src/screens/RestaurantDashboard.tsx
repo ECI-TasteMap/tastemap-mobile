@@ -7,6 +7,7 @@ import {
   Text,
   TouchableOpacity,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getRestaurants } from '../services/api/restaurantService';
 
 // ── Mock data (reemplazar con llamadas al backend) ──────────────────────────
@@ -70,6 +71,7 @@ const Estrellas = ({ cantidad }: { cantidad: number }) => (
 );
 
 export default function RestaurantOwnerDashboard() {
+  const insets = useSafeAreaInsets();
   const [reservas, setReservas] = useState(RESERVAS_HOY);
 
   const confirmar = (id: string) =>
@@ -86,7 +88,11 @@ export default function RestaurantOwnerDashboard() {
     );
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingTop: insets.top }}
+      showsVerticalScrollIndicator={false}
+    >
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.direccion}> </Text>
@@ -213,7 +219,7 @@ const styles = StyleSheet.create({
   },
 
   // Header
-  header: { paddingTop: 24, paddingBottom: 8 },
+  header: { paddingTop: 12, paddingBottom: 8 },
   direccion: {
     color: '#FFFFFF',
     fontSize: 12,

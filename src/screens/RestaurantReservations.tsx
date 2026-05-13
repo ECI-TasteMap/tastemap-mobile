@@ -6,6 +6,7 @@ import {
   Text,
   TouchableOpacity,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ── Mock data (reemplazar con llamadas al backend) ──────────────────────────
 type EstadoReserva = 'pendiente' | 'confirmada' | 'completada' | 'rechazada';
@@ -95,6 +96,7 @@ const BORDER_COLORS: Record<EstadoReserva, string> = {
 };
 
 export default function GestionReservas() {
+  const insets = useSafeAreaInsets();
   const [tabActiva, setTabActiva] = useState<TabId>('hoy');
   const [reservas, setReservas] = useState<Reserva[]>(RESERVAS_MOCK);
 
@@ -118,7 +120,7 @@ export default function GestionReservas() {
   return (
     <View style={styles.wrapper}>
       {/* Header con gradiente simulado */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.headerTitulo}>Gestión de Reservas</Text>
         <Text style={styles.headerSub}>La Trattoria · Lunes 10 Mar 2026</Text>
       </View>

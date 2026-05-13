@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
 type RangoPrecio = '$' | '$$' | '$$$' | '$$$$';
@@ -27,6 +28,7 @@ const RANGOS: RangoPrecio[] = ['$', '$$', '$$$', '$$$$'];
 // ───────────────────────────────────────────────────────────────────────────
 
 export default function RegistrarRestaurante() {
+  const insets = useSafeAreaInsets();
   const [form, setForm] = useState<FormData>({
     nombre: '',
     direccion: '',
@@ -90,7 +92,7 @@ export default function RegistrarRestaurante() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
           <Text style={styles.headerTitulo}>Registrar Restaurante</Text>
           <Text style={styles.headerSub}>
             Aparece en TasteMap y atrae nuevos clientes
@@ -247,7 +249,7 @@ export default function RegistrarRestaurante() {
       </ScrollView>
 
       {/* CTA fijo en la parte inferior */}
-      <View style={styles.ctaContainer}>
+      <View style={[styles.ctaContainer, { paddingBottom: insets.bottom + 20 }]}>
         <TouchableOpacity style={styles.ctaBtn} onPress={enviar}>
           <Text style={styles.ctaBtnTexto}>Enviar para revisión →</Text>
         </TouchableOpacity>
