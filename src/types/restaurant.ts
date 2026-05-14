@@ -1,37 +1,51 @@
 /**
- * Restaurant type matching the backend DTO
+ * Restaurant DTO matching the real backend response.
+ * GET /api/v1/restaurants  and  GET /api/v1/restaurants/:id
  */
 export interface Restaurant {
   id: string;
   ownerId: string;
   name: string;
   description: string;
-  logo?: string;
-  menu: string; // Plain text, comma/semicolon separated items, URL, or PDF link
+  /** Can be null when the owner has not uploaded a logo yet. */
+  logo: string | null;
+  /** Can be null when the owner has not uploaded a menu yet. */
+  menu: string | null;
   theme?: string;
   locations: string[];
   tags: string[];
   priceMin: number;
   priceMax: number;
   hour?: string;
-  // TODO: add reservationUrl to backend DTO (GET /api/v1/restaurants/:id)
+  /** Nullable — not all restaurants have a phone number registered. */
+  phone?: string | null;
+  /** "ABIERTO" | "CERRADO" — derive isOpen with: openStatus === "ABIERTO" */
+  openStatus?: string;
+  // TODO: request backend to add reservationUrl to the DTO
   reservationUrl?: string;
 }
 
 /**
- * Mock-only fields not yet available from the backend
+ * Fields that the backend does NOT provide yet.
+ * Used as a local overlay until real endpoints exist.
  */
 export interface RestaurantDetailMock {
+  /** TODO: GET /api/v1/restaurants/:id/stats (rating endpoint pending) */
   averageRating: number;
+  /** TODO: count from GET /api/v1/restaurants/:id/reviews */
   reviewCount: number;
-  phone: string;
+  /** TODO: compute from user GPS + restaurant coords */
   distanceLabel: string;
+  /** TODO: compute from distance */
   estimatedTimeLabel: string;
+  /** TODO: compute from hour + openStatus */
   openUntilLabel: string;
+  /** Derived from openStatus — kept here so UI code has a single boolean. */
   isOpen: boolean;
 }
 
 /**
- * Combined restaurant detail (API data + mock data for missing fields)
+ * Combined shape used by RestaurantDetailScreen.
+ * Real backend fields + local mock overlay for missing ones.
  */
 export interface RestaurantDetail extends Restaurant, RestaurantDetailMock {}

@@ -20,7 +20,7 @@ export type ParsedMenu =
  * - URLs or PDF links → return as URL type
  * - Empty/missing → return empty type
  */
-export function parseMenuField(menu: string | undefined): ParsedMenu {
+export function parseMenuField(menu: string | null | undefined): ParsedMenu {
   if (!menu || menu.trim() === '') {
     return {
       type: 'empty',

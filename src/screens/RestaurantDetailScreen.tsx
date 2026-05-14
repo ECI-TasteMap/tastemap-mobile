@@ -14,7 +14,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import ScreenContainer from '../components/layout/ScreenContainer';
 import { useRestaurantById } from '../hooks/useRestaurantById';
-import { restaurantDetailMock, sampleRestaurant } from '../mocks/restaurantDetailMock';
+import { restaurantDetailMock } from '../mocks/restaurantDetailMock';
 import { parseMenuField } from '../utils/menuParser';
 import { restaurantDetailStyles as styles } from './RestaurantDetailScreen.styles';
 import { colors } from '../theme/colors';
@@ -23,21 +23,26 @@ import type { RestaurantDetail } from '../types/restaurant';
 
 type Props = NativeStackScreenProps<UserStackParamList, 'RestaurantDetail'>;
 
+/** Derive boolean open state from the backend's string field. */
+function resolveIsOpen(openStatus?: string | null): boolean {
+  return (openStatus ?? '').toUpperCase() === 'ABIERTO';
+}
+
 export default function RestaurantDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<UserStackParamList>>();
   const route = useRoute<Props['route']>();
   const { restaurantId } = route.params;
 
   const [isFavorite, setIsFavorite] = useState(false);
+  const [logoLoadError, setLogoLoadError] = useState(false);
 
-  const { data: apiData, isLoading, isError } = useRestaurantById(restaurantId);
+  const { data: apiData, isLoading, isError, refetch } = useRestaurantById(restaurantId);
 
-  let restaurant: RestaurantDetail | null = null;
-  if (apiData) {
-    restaurant = { ...apiData, ...restaurantDetailMock };
-  } else if (isError) {
-    restaurant = { ...sampleRestaurant, ...restaurantDetailMock };
-  }
+  // Build RestaurantDetail only when we have real data from the API.
+  // Real data wins over the mock overlay; isOpen is derived from openStatus.
+  const restaurant: RestaurantDetail | null = apiData
+    ? { ...restaurantDetailMock, ...apiData, isOpen: resolveIsOpen(apiData.openStatus) }
+    : null;
 
   const handleReservation = () => {
     if (!restaurant) return;
@@ -54,12 +59,10 @@ export default function RestaurantDetailScreen() {
   };
 
   const handleOpenMenu = (url: string) => {
-    Linking.openURL(url).catch(() =>
-      Alert.alert('Error', 'No se pudo abrir el menú.')
-    );
+    Linking.openURL(url).catch(() => Alert.alert('Error', 'No se pudo abrir el menú.'));
   };
 
-  if (isLoading && !restaurant) {
+  if (isLoading) {
     return (
       <ScreenContainer noPadding>
         <View style={styles.centerContainer}>
@@ -70,13 +73,21 @@ export default function RestaurantDetailScreen() {
     );
   }
 
-  if (!restaurant) {
+  if (isError || !restaurant) {
     return (
       <ScreenContainer noPadding>
         <View style={styles.centerContainer}>
+          <Ionicons name="wifi-outline" size={48} color={colors.textMuted} />
           <Text style={styles.errorText}>No se pudo cargar el restaurante</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.retryButtonText}>Volver</Text>
+          <Text style={styles.loadingText}>Revisa tu conexión e intenta de nuevo.</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => void refetch()}>
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.retryButton, { marginTop: 8, backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border }]}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={[styles.retryButtonText, { color: colors.textSecondary }]}>Volver</Text>
           </TouchableOpacity>
         </View>
       </ScreenContainer>
@@ -87,6 +98,8 @@ export default function RestaurantDetailScreen() {
   const parsedMenu = parseMenuField(restaurant.menu);
   const priceLabel = `$${restaurant.priceMin.toLocaleString()} - $${restaurant.priceMax.toLocaleString()}`;
   const cuisineTag = restaurant.theme || restaurant.tags?.[0] || 'Restaurante';
+  const showLogo = Boolean(restaurant.logo) && !logoLoadError;
+  const displayPhone = restaurant.phone || 'No disponible';
 
   return (
     <ScreenContainer noPadding>
@@ -109,8 +122,12 @@ export default function RestaurantDetailScreen() {
           </TouchableOpacity>
 
           <View style={styles.logoContainer}>
-            {restaurant.logo ? (
-              <Image source={{ uri: restaurant.logo }} style={styles.logo} />
+            {showLogo ? (
+              <Image
+                source={{ uri: restaurant.logo! }}
+                style={styles.logo}
+                onError={() => setLogoLoadError(true)}
+              />
             ) : (
               <View style={styles.logoFallback}>
                 <Ionicons name="restaurant" size={80} color={colors.gold} />
@@ -139,7 +156,7 @@ export default function RestaurantDetailScreen() {
             </View>
           </View>
 
-          {/* Rating */}
+          {/* Rating — mock until reviews endpoint is available */}
           <View style={styles.ratingRow}>
             <View style={styles.starsContainer}>
               {([1, 2, 3, 4, 5] as const).map((pos) => (
@@ -168,13 +185,13 @@ export default function RestaurantDetailScreen() {
             <View style={styles.infoCard}>
               <Ionicons name="time" size={20} color={colors.gold} />
               <Text style={styles.infoLabel}>HORARIO</Text>
-              <Text style={styles.infoValue}>{restaurant.hour || 'Mar-Dom 12:00-22:00'}</Text>
+              <Text style={styles.infoValue}>{restaurant.hour || 'Consultar horario'}</Text>
               <Text style={styles.infoExtra}>{restaurant.openUntilLabel}</Text>
             </View>
             <View style={styles.infoCard}>
               <Ionicons name="call" size={20} color={colors.gold} />
               <Text style={styles.infoLabel}>TELÉFONO</Text>
-              <Text style={styles.infoValue}>{restaurant.phone}</Text>
+              <Text style={styles.infoValue}>{displayPhone}</Text>
             </View>
             <View style={styles.infoCard}>
               <Ionicons name="walk" size={20} color={colors.gold} />
