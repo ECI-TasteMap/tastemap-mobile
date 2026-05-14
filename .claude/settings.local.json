@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:tastemapbackend.onrender.com)"
+      "WebFetch(domain:tastemapbackend.onrender.com)",
+      "Bash(npx tsc *)"
     ]
   }
 }

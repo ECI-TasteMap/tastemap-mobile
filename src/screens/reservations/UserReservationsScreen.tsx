@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,15 @@ import {
   TouchableOpacity,
   Animated,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ReservationCard from '../../components/reservations/ReservationCard';
-import { userReservationsMock } from '../../mocks/userReservationsMock';
+import { useUserReservations } from '../../hooks/useUserReservations';
+import { useCancelReservation } from '../../hooks/useCancelReservation';
+import { useRestaurants } from '../../hooks/useRestaurants';
+import { useAuthStore } from '../../store/authStore';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { radius } from '../../theme/radius';
@@ -20,10 +24,36 @@ import type { UserReservation, ReservationType } from '../../types/reservation';
 export default function UserReservationsScreen() {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<ReservationType>('upcoming');
-  const [reservations, setReservations] = useState<UserReservation[]>(userReservationsMock);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  const filtered = reservations.filter((r) => r.type === activeTab);
+  const { userId } = useAuthStore();
+
+  const { data: rawReservations, isLoading, isError, refetch } = useUserReservations(userId);
+  const { data: restaurants } = useRestaurants();
+  const { mutate: cancelReservation } = useCancelReservation(userId);
+
+  const restaurantMap = useMemo(() => {
+    const map = new Map<string, { name: string; logo: string | null }>();
+    restaurants?.forEach((r) => map.set(r.id, { name: r.name, logo: r.logo }));
+    return map;
+  }, [restaurants]);
+
+  const reservations: UserReservation[] = useMemo(() => {
+    return (rawReservations ?? []).map((r) => {
+      const cached = restaurantMap.get(r.restaurantId);
+      const logo = cached?.logo;
+      return {
+        ...r,
+        restaurantName: cached?.name ?? r.restaurantName,
+        restaurantLogo: logo != null ? logo : undefined,
+      };
+    });
+  }, [rawReservations, restaurantMap]);
+
+  const filtered = useMemo(
+    () => reservations.filter((r) => r.type === activeTab),
+    [reservations, activeTab]
+  );
 
   const switchTab = (tab: ReservationType) => {
     if (tab === activeTab) return;
@@ -34,11 +64,7 @@ export default function UserReservationsScreen() {
   };
 
   const handleCancel = (id: string) => {
-    setReservations((prev) =>
-      prev.map((r) =>
-        r.id === id ? { ...r, status: 'cancelled' as const, canCancel: false, type: 'past' as const } : r
-      )
-    );
+    cancelReservation(id);
   };
 
   const renderItem = ({ item }: { item: UserReservation }) => (
@@ -74,22 +100,59 @@ export default function UserReservationsScreen() {
         </View>
       </View>
 
+      {/* Loading */}
+      {isLoading && (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.gold} />
+          <Text style={styles.loadingText}>Cargando reservas...</Text>
+        </View>
+      )}
+
+      {/* Error */}
+      {!isLoading && isError && (
+        <View style={styles.centerContainer}>
+          <Ionicons name="wifi-outline" size={48} color={colors.textMuted} />
+          <Text style={styles.errorText}>No se pudieron cargar las reservas</Text>
+          <Text style={styles.loadingText}>Revisa tu conexión e intenta de nuevo.</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => void refetch()}>
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* List with fade animation */}
-      <Animated.View style={[styles.listWrapper, { opacity: fadeAnim }]}>
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={<EmptyState tab={activeTab} />}
-        />
-      </Animated.View>
+      {!isLoading && !isError && (
+        <Animated.View style={[styles.listWrapper, { opacity: fadeAnim }]}>
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={<EmptyState tab={activeTab} hasAuth={Boolean(userId)} />}
+          />
+        </Animated.View>
+      )}
     </View>
   );
 }
 
-function EmptyState({ tab }: Readonly<{ tab: ReservationType }>) {
+function EmptyState({
+  tab,
+  hasAuth,
+}: Readonly<{ tab: ReservationType; hasAuth: boolean }>) {
+  if (!hasAuth) {
+    return (
+      <View style={styles.empty}>
+        <Ionicons name="person-outline" size={52} color={colors.gold} />
+        <Text style={styles.emptyTitle}>Inicia sesión</Text>
+        <Text style={styles.emptySubtitle}>
+          Conéctate con tu cuenta para ver y gestionar tus reservas.
+        </Text>
+      </View>
+    );
+  }
+
   const isUpcoming = tab === 'upcoming';
   return (
     <View style={styles.empty}>
@@ -165,6 +228,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.screen,
     paddingTop: spacing.md,
     paddingBottom: spacing.xxl + spacing.xl,
+  },
+
+  // Center states (loading / error)
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+  },
+  loadingText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    fontFamily: typography.fontFamily.body,
+    textAlign: 'center',
+  },
+  errorText: {
+    color: colors.textPrimary,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.semibold,
+    fontFamily: typography.fontFamily.body,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: colors.gold,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.md,
+    marginTop: spacing.sm,
+  },
+  retryButtonText: {
+    color: colors.background,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+    fontFamily: typography.fontFamily.body,
   },
 
   // Empty state
