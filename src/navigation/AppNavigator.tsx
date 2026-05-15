@@ -10,23 +10,25 @@ import type { RootStackParamList } from './types';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
-  const { role, setToken, setRole } = useAuthStore();
+  const { role, setToken, setRole, setUserId } = useAuthStore();
 
   useEffect(() => {
   supabase.auth.getSession().then(({ data: { session } }) => {
     if (session?.access_token) {
       setToken(session.access_token);
-      setRole('user'); // sesión existente al abrir la app
+      setUserId(session.user.id);
+      setRole('user');
     }
   });
 
   const { data: { subscription } } = supabase.auth.onAuthStateChange(
     (_event, session) => {
       setToken(session?.access_token ?? null);
+      setUserId(session?.user?.id ?? null);
       if (session?.user) {
         setRole('user');
       } else {
-        setRole(null); 
+        setRole(null);
       }
     }
   );

@@ -14,15 +14,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import ScreenContainer from '../../components/layout/ScreenContainer';
 import { aiService, type AIMessage } from '../../services/api/aiService';
+import { useAuthStore } from '../../store/authStore';
 import { colors } from '../../theme/colors';
 import { radius } from '../../theme/radius';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 
-// TODO: replace with real user ID from auth token once login endpoint stores session data.
-const TEMP_USER_ID = '69f14e016faf3c38a1f58978';
-
 export default function AIScreen() {
+  const { userId } = useAuthStore();
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -42,6 +41,7 @@ export default function AIScreen() {
 
   const loadHistory = useCallback(
     async (isRefresh = false) => {
+      if (!userId) { setLoading(false); setRefreshing(false); return; }
       if (isRefresh) {
         setRefreshing(true);
       } else {
@@ -50,7 +50,7 @@ export default function AIScreen() {
 
       try {
         setError(null);
-        const history = await aiService.getHistory(TEMP_USER_ID, 50, 0);
+        const history = await aiService.getHistory(userId, 50, 0);
         setMessages(sortByTime(history.messages));
       } catch (e) {
         const message = e instanceof Error ? e.message : 'No se pudo cargar el historial';
@@ -60,7 +60,7 @@ export default function AIScreen() {
         setRefreshing(false);
       }
     },
-    [sortByTime]
+    [sortByTime, userId]
   );
 
   useEffect(() => {
@@ -74,6 +74,7 @@ export default function AIScreen() {
   }, [messages]);
 
   const handleSend = useCallback(async () => {
+    if (!userId) return;
     const text = input.trim();
     if (!text || sending) return;
 
@@ -82,7 +83,7 @@ export default function AIScreen() {
     setInput('');
 
     try {
-      const newItem = await aiService.sendMessage(TEMP_USER_ID, text);
+      const newItem = await aiService.sendMessage(userId, text);
       setMessages((prev) => sortByTime([...prev, newItem]));
     } catch (e) {
       const message = e instanceof Error ? e.message : 'No se pudo enviar el mensaje';
@@ -91,9 +92,10 @@ export default function AIScreen() {
     } finally {
       setSending(false);
     }
-  }, [input, sending, sortByTime]);
+  }, [input, sending, sortByTime, userId]);
 
   const handleClearHistory = useCallback(() => {
+    if (!userId) return;
     Alert.alert('Limpiar chat', 'Se eliminara todo tu historial con la IA.', [
       { text: 'Cancelar', style: 'cancel' },
       {
@@ -101,7 +103,7 @@ export default function AIScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await aiService.deleteHistory(TEMP_USER_ID);
+            await aiService.deleteHistory(userId);
             setMessages([]);
           } catch (e) {
             const message = e instanceof Error ? e.message : 'No se pudo limpiar el historial';
@@ -110,7 +112,7 @@ export default function AIScreen() {
         },
       },
     ]);
-  }, []);
+  }, [userId]);
 
   const renderItem = ({ item }: { item: AIMessage }) => (
     <View style={styles.messagePair}>
@@ -129,6 +131,20 @@ export default function AIScreen() {
       </View>
     </View>
   );
+
+  if (!userId) {
+    return (
+      <ScreenContainer>
+        <View style={styles.centered}>
+          <Ionicons name="person-outline" size={52} color={colors.gold} />
+          <Text style={styles.emptyTitle}>Inicia sesión</Text>
+          <Text style={styles.emptySubtitle}>
+            Debes iniciar sesión para acceder al asistente IA.
+          </Text>
+        </View>
+      </ScreenContainer>
+    );
+  }
 
   return (
     <KeyboardAvoidingView

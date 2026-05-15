@@ -21,6 +21,8 @@ export interface Restaurant {
   phone?: string | null;
   /** "ABIERTO" | "CERRADO" — derive isOpen with: openStatus === "ABIERTO" */
   openStatus?: string;
+  /** Backend-provided average rating (0–5). Present in list and detail responses. */
+  averageRating?: number;
   // TODO: request backend to add reservationUrl to the DTO
   reservationUrl?: string;
 }
@@ -30,8 +32,6 @@ export interface Restaurant {
  * Used as a local overlay until real endpoints exist.
  */
 export interface RestaurantDetailMock {
-  /** TODO: GET /api/v1/restaurants/:id/stats (rating endpoint pending) */
-  averageRating: number;
   /** TODO: count from GET /api/v1/restaurants/:id/reviews */
   reviewCount: number;
   /** TODO: compute from user GPS + restaurant coords */
