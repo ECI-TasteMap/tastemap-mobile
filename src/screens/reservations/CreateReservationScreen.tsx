@@ -28,7 +28,7 @@ type Props = NativeStackScreenProps<UserStackParamList, 'CreateReservation'>;
 
 function isValidDate(s: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  return !isNaN(new Date(s + 'T00:00:00').getTime());
+  return !Number.isNaN(new Date(s + 'T00:00:00').getTime());
 }
 
 function isValidTime(s: string): boolean {
@@ -61,12 +61,11 @@ export default function CreateReservationScreen() {
 
   const handleSubmit = () => {
     if (!userId) return;
-    const [hour, minute] = timeInput.split(':').map(Number);
     const payload: BackendReservationCreate = {
       userId,
       restaurantId,
       date,
-      time: { hour, minute, second: 0, nano: 0 },
+      time: `${timeInput}:00`,
       numberOfGuests: guests,
       specialRequests: specialRequests.trim() || undefined,
     };

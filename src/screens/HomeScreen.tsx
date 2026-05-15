@@ -88,7 +88,9 @@ function RestaurantCardHorizontal({
           {item.tags[0]} · {item.locations[0]}
         </Text>
         <View style={styles.restaurantFooter}>
-          <Text style={styles.rating}>★ 4.5</Text>
+          <Text style={styles.rating}>
+            ★ {item.averageRating != null ? item.averageRating.toFixed(1) : '—'}
+          </Text>
           <Text style={styles.distancia}>~1 km</Text>
         </View>
       </TouchableOpacity>
@@ -115,7 +117,9 @@ function PopularRow({ item, onPress }: { item: Restaurant; onPress: () => void }
         </Text>
       </View>
       <View style={styles.popularDerecha}>
-        <Text style={styles.rating}>★ 4.5</Text>
+        <Text style={styles.rating}>
+          ★ {item.averageRating != null ? item.averageRating.toFixed(1) : '—'}
+        </Text>
         <Text style={styles.distancia}>~1 km</Text>
       </View>
     </TouchableOpacity>

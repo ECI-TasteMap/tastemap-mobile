@@ -140,14 +140,16 @@ export default function RestaurantDetailOwner({
               {[...Array(5)].map((_, i) => (
                 <Ionicons
                   key={i}
-                  name={i < Math.floor(restaurant.averageRating) ? 'star' : 'star-outline'}
+                  name={i < Math.floor(restaurant.averageRating ?? 0) ? 'star' : 'star-outline'}
                   size={16}
                   color="#c9a96e"
                   style={{ marginRight: 2 }}
                 />
               ))}
             </View>
-            <Text style={styles.ratingText}>{restaurant.averageRating.toFixed(1)}</Text>
+            <Text style={styles.ratingText}>
+              {restaurant.averageRating != null ? restaurant.averageRating.toFixed(1) : '—'}
+            </Text>
             <Text style={styles.reviewCountText}>· {restaurant.reviewCount} reseñas</Text>
           </View>
 

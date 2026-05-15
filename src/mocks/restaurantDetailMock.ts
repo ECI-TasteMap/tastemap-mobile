@@ -5,7 +5,6 @@ import type { RestaurantDetailMock } from '../types/restaurant';
  * phone and openStatus now come from the real API — do not add them here.
  */
 export const restaurantDetailMock: RestaurantDetailMock = {
-  averageRating: 4.8,
   reviewCount: 128,
   distanceLabel: '0.8 km',
   estimatedTimeLabel: '~10 min',
