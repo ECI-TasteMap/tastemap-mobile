@@ -2,6 +2,7 @@
   "expo": {
     "name": "tastemap-mobile",
     "slug": "tastemap-mobile",
+    "scheme": "tastemap",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo-fondo-blanco.png",
@@ -28,7 +29,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-web-browser"
     ]
   }
 }
