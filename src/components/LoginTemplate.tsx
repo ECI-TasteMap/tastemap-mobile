@@ -21,8 +21,8 @@ interface LoginTemplateProps {
   mainSubtitle: string;
   emailLabel: string;
   emailPlaceholder: string;
-  passwordLabel: string;
-  passwordPlaceholder: string;
+  passwordLabel?: string;
+  passwordPlaceholder?: string;
   primaryButtonText: string;
   primaryButtonColor: string;
   secondaryButtonText: string;
@@ -32,7 +32,7 @@ interface LoginTemplateProps {
   footerSecondaryText?: string;
   footerSecondaryActionText?: string;
   footerSecondaryActionColor?: string;
-  onPrimaryPress?: () => void;
+  onPrimaryPress?: (email: string) => void;
   onSecondaryPress?: () => void;
   onFooterActionPress?: () => void;
   onFooterSecondaryActionPress?: () => void;
@@ -70,7 +70,7 @@ export default function LoginTemplate({
 
   const handlePrimaryPress = () => {
     if (onPrimaryPress) {
-      onPrimaryPress();
+      onPrimaryPress(email);
     } else {
       console.log(`${mode} login attempt`);
     }
@@ -151,13 +151,15 @@ export default function LoginTemplate({
           />
 
           {/* Password Input */}
-          <AuthInput
-            label={passwordLabel}
-            placeholder={passwordPlaceholder}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          {passwordLabel && passwordPlaceholder && (
+            <AuthInput
+              label={passwordLabel}
+              placeholder={passwordPlaceholder}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          )}
 
           {/* Primary Button */}
           <TouchableOpacity

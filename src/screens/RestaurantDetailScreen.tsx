@@ -46,16 +46,10 @@ export default function RestaurantDetailScreen() {
 
   const handleReservation = () => {
     if (!restaurant) return;
-    if (restaurant.reservationUrl) {
-      Linking.openURL(restaurant.reservationUrl).catch(() =>
-        Alert.alert('Error', 'No se pudo abrir el enlace de reserva.')
-      );
-    } else {
-      Alert.alert(
-        'Sin enlace de reserva',
-        'Este restaurante aún no tiene un enlace de reserva disponible.'
-      );
-    }
+    navigation.navigate('CreateReservation', {
+      restaurantId,
+      restaurantName: restaurant.name,
+    });
   };
 
   const handleOpenMenu = (url: string) => {

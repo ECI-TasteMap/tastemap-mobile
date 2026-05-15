@@ -1,3 +1,5 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
+
 export type AuthStackParamList = {
   UserLogin: undefined;
   RestaurantLogin: undefined;
@@ -12,8 +14,9 @@ export type UserTabParamList = {
 };
 
 export type UserStackParamList = {
-  UserTabs: undefined;
+  UserTabs: NavigatorScreenParams<UserTabParamList> | undefined;
   RestaurantDetail: { restaurantId: string };
+  CreateReservation: { restaurantId: string; restaurantName?: string };
 };
 
 export type RestaurantTabParamList = {

@@ -3,6 +3,7 @@ import type { UserReservation } from '../types/reservation';
 export const userReservationsMock: UserReservation[] = [
   {
     id: '1',
+    restaurantId: 'mock-bella-italia',
     restaurantName: 'La Trattoria',
     restaurantEmoji: '🍝',
     dateLabel: 'Dom 15 Mar',
@@ -14,6 +15,7 @@ export const userReservationsMock: UserReservation[] = [
   },
   {
     id: '2',
+    restaurantId: 'mock-sushi-otaku',
     restaurantName: 'Sakura Garden',
     restaurantEmoji: '🍣',
     dateLabel: 'Vie 20 Mar',
@@ -25,6 +27,7 @@ export const userReservationsMock: UserReservation[] = [
   },
   {
     id: '3',
+    restaurantId: 'mock-burger-bros',
     restaurantName: 'Burger Republic',
     restaurantEmoji: '🍔',
     dateLabel: 'Jue 27 Mar',
@@ -36,6 +39,7 @@ export const userReservationsMock: UserReservation[] = [
   },
   {
     id: '4',
+    restaurantId: 'mock-bella-italia',
     restaurantName: 'La Trattoria',
     restaurantEmoji: '🍝',
     dateLabel: 'Sáb 1 Mar',
@@ -47,6 +51,7 @@ export const userReservationsMock: UserReservation[] = [
   },
   {
     id: '5',
+    restaurantId: 'mock-burger-bros',
     restaurantName: 'Burger Republic',
     restaurantEmoji: '🍔',
     dateLabel: 'Dom 22 Feb',
