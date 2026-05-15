@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "tastemap-mobile",
-    "slug": "tastemap-mobile",
+    "slug": "tastemap",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo-fondo-blanco.png",
@@ -21,7 +21,8 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.tastemap.mobile"
     },
     "web": {
       "favicon": "./assets/logo-sin-fondo.png"
@@ -29,6 +30,13 @@
     "plugins": [
       "expo-router",
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0c7d643c-733e-43b6-98f4-33f4956a0200"
+      }
+    },
+    "owner": "waldron63s-organization"
   }
 }
