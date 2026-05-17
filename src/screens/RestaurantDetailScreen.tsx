@@ -156,14 +156,16 @@ export default function RestaurantDetailScreen() {
               {([1, 2, 3, 4, 5] as const).map((pos) => (
                 <Ionicons
                   key={`star-${pos}`}
-                  name={pos <= Math.floor(restaurant.averageRating) ? 'star' : 'star-outline'}
+                  name={pos <= Math.floor(restaurant.averageRating ?? 0) ? 'star' : 'star-outline'}
                   size={16}
                   color={colors.gold}
                   style={{ marginRight: 2 }}
                 />
               ))}
             </View>
-            <Text style={styles.ratingText}>{restaurant.averageRating.toFixed(1)}</Text>
+            <Text style={styles.ratingText}>
+              {restaurant.averageRating != null ? restaurant.averageRating.toFixed(1) : '—'}
+            </Text>
             <Text style={styles.reviewCountText}>· {restaurant.reviewCount} reseñas</Text>
           </View>
 

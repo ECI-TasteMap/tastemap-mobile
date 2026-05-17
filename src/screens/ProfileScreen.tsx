@@ -10,27 +10,40 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getUserById, type UserProfile } from '../services/api/userService';
+import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
 import { typography } from '../theme/typography';
 
-// TODO: replace with real user ID from auth token (POST /api/v1/auth/login response)
-const TEMP_USER_ID = '69f14e016faf3c38a1f58978';
-
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const logout = useAuthStore((s) => s.logout);
+  const userId = useAuthStore((s) => s.userId);
   const [usuario, setUsuario] = useState<UserProfile | null>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
-    getUserById(TEMP_USER_ID)
+    if (!userId) {
+      setCargando(false);
+      return;
+    }
+    getUserById(userId)
       .then(setUsuario)
-      .catch((err) => console.error('Failed to load user:', err))
+      .catch(async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setUsuario({
+            id: session.user.id,
+            fullname: (session.user.user_metadata?.full_name as string | undefined) ?? session.user.email ?? 'Usuario',
+            email: session.user.email ?? '',
+            role: 'user',
+          });
+        }
+      })
       .finally(() => setCargando(false));
-  }, []);
+  }, [userId]);
 
   if (cargando) {
     return (

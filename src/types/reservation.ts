@@ -23,7 +23,7 @@ export interface BackendReservationCreate {
   userId: string;
   restaurantId: string;
   date: string; // ISO date: "2026-05-14"
-  time: BackendLocalTime;
+  time: string; // LocalTime string: "HH:mm:ss"
   numberOfGuests: number;
   specialRequests?: string;
 }
