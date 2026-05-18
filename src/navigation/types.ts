@@ -3,6 +3,9 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 export type AuthStackParamList = {
   UserLogin: undefined;
   RestaurantLogin: undefined;
+  UserRegister: undefined;
+  RestaurantRegister: undefined;
+  VerifyEmailCode: { email: string; role: 'USER' | 'OWNER' };
 };
 
 export type UserTabParamList = {
@@ -28,7 +31,7 @@ export type RestaurantTabParamList = {
 
 export type RestaurantStackParamList = {
   RestaurantTabs: undefined;
-  NewLocal: undefined;
+  RestaurantForm: { mode: 'create' | 'edit'; restaurantId?: string };
 };
 
 export type RootStackParamList = {

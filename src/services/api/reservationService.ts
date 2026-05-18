@@ -16,3 +16,21 @@ export async function createReservation(
 export async function deleteReservation(id: string): Promise<void> {
   await apiClient.delete(`/api/v1/reservations/${id}`);
 }
+
+export async function getRestaurantReservations(restaurantId: string): Promise<BackendReservation[]> {
+  const response = await apiClient.get<BackendReservation[]>(
+    `/api/v1/reservations/restaurant/${restaurantId}`
+  );
+  return Array.isArray(response.data) ? response.data : [];
+}
+
+// date must be ISO format: YYYY-MM-DD
+export async function getRestaurantReservationsByDate(
+  restaurantId: string,
+  date: string
+): Promise<BackendReservation[]> {
+  const response = await apiClient.get<BackendReservation[]>(
+    `/api/v1/reservations/restaurant/${restaurantId}/date/${date}`
+  );
+  return Array.isArray(response.data) ? response.data : [];
+}

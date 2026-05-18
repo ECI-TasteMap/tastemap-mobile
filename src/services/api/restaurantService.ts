@@ -22,3 +22,25 @@ export async function getRestaurantById(restaurantId: string): Promise<Restauran
   const response = await apiClient.get<Restaurant>(`/api/v1/restaurants/${restaurantId}`);
   return applyRestaurantLogoMock(response.data);
 }
+
+// TODO: Replace filter with GET /api/v1/restaurants/owner/{ownerId} when backend adds it.
+// Fetches all restaurants and filters by ownerId client-side.
+export async function getRestaurantsByOwnerId(ownerId: string): Promise<Restaurant[]> {
+  const response = await apiClient.get<Restaurant[]>('/api/v1/restaurants');
+  const all: Restaurant[] = Array.isArray(response.data) ? response.data : [];
+  return applyRestaurantLogoMocks(all.filter((r) => r.ownerId === ownerId));
+}
+
+export async function createRestaurant(formData: FormData): Promise<Restaurant> {
+  const response = await apiClient.post<Restaurant>('/api/v1/restaurants', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+}
+
+export async function updateRestaurant(restaurantId: string, formData: FormData): Promise<Restaurant> {
+  const response = await apiClient.put<Restaurant>(`/api/v1/restaurants/${restaurantId}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+}

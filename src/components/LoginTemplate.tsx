@@ -32,7 +32,7 @@ interface LoginTemplateProps {
   footerSecondaryText?: string;
   footerSecondaryActionText?: string;
   footerSecondaryActionColor?: string;
-  onPrimaryPress?: (email: string) => void;
+  onPrimaryPress?: (email: string, password?: string) => void;
   onSecondaryPress?: () => void;
   onFooterActionPress?: () => void;
   onFooterSecondaryActionPress?: () => void;
@@ -70,7 +70,7 @@ export default function LoginTemplate({
 
   const handlePrimaryPress = () => {
     if (onPrimaryPress) {
-      onPrimaryPress(email);
+      onPrimaryPress(email, password || undefined);
     } else {
       console.log(`${mode} login attempt`);
     }

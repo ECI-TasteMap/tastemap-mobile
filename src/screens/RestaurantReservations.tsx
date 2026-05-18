@@ -1,251 +1,295 @@
-import { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
   View,
   Text,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRestaurantReservations } from '../hooks/useRestaurantReservations';
+import { useRestaurantById } from '../hooks/useRestaurantById';
+import { useAuthStore } from '../store/authStore';
+import { colors } from '../theme/colors';
+import type { BackendLocalTime, BackendReservation } from '../types/reservation';
 
-// ── Mock data (reemplazar con llamadas al backend) ──────────────────────────
-type EstadoReserva = 'pendiente' | 'confirmada' | 'completada' | 'rechazada';
-type TabId = 'hoy' | 'semana' | 'historial';
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
-interface Reserva {
-  id: string;
-  nombre: string;
-  hora: string;
-  dia: 'Hoy' | 'Mañana' | string;
-  personas: number;
-  mesa: string;
-  nota?: string;
-  estado: EstadoReserva;
-  tab: TabId;
-}
-
-const RESERVAS_MOCK: Reserva[] = [
-  {
-    id: '1',
-    nombre: 'María García',
-    hora: '8:00 PM',
-    dia: 'Hoy',
-    personas: 2,
-    mesa: 'Mesa interior',
-    nota: 'Aniversario 🤌',
-    estado: 'pendiente',
-    tab: 'hoy',
-  },
-  {
-    id: '2',
-    nombre: 'Luis Martínez',
-    hora: '9:00 PM',
-    dia: 'Hoy',
-    personas: 6,
-    mesa: 'Mesa grande',
-    nota: 'Sin gluten',
-    estado: 'pendiente',
-    tab: 'hoy',
-  },
-  {
-    id: '3',
-    nombre: 'Carlos Herrera',
-    hora: '7:30 PM',
-    dia: 'Hoy',
-    personas: 4,
-    mesa: 'Mesa exterior',
-    nota: undefined,
-    estado: 'completada',
-    tab: 'hoy',
-  },
-  {
-    id: '4',
-    nombre: 'Ana Rodríguez',
-    hora: '1:00 PM',
-    dia: 'Mañana',
-    personas: 2,
-    mesa: '',
-    nota: '"Menú vegetariano por favor"',
-    estado: 'pendiente',
-    tab: 'semana',
-  },
-  {
-    id: '5',
-    nombre: 'Roberto Salcedo',
-    hora: '7:00 PM',
-    dia: 'Mié 12',
-    personas: 3,
-    mesa: 'Mesa bar',
-    estado: 'confirmada',
-    tab: 'semana',
-  },
-];
+type TabId = 'hoy' | 'proximas' | 'todas';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'hoy', label: 'Hoy' },
-  { id: 'semana', label: 'Esta semana' },
-  { id: 'historial', label: 'Historial' },
+  { id: 'proximas', label: 'Próximas' },
+  { id: 'todas', label: 'Todas' },
 ];
-// ───────────────────────────────────────────────────────────────────────────
 
-const BORDER_COLORS: Record<EstadoReserva, string> = {
-  pendiente: '#c9a96e',
-  confirmada: '#4dd9c0',
-  completada: '#4a5568',
-  rechazada: '#d9504d',
-};
+function formatTime({ hour, minute }: BackendLocalTime): string {
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function getTodayISO(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+function getDateLabel(isoDate: string, todayISO: string): string {
+  if (isoDate === todayISO) return 'Hoy';
+  const d = new Date(todayISO);
+  d.setDate(d.getDate() + 1);
+  const tomorrowISO = d.toISOString().split('T')[0];
+  if (isoDate === tomorrowISO) return 'Mañana';
+  const [y, m, day] = isoDate.split('-').map(Number);
+  return new Date(y, m - 1, day).toLocaleDateString('es-ES', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+  });
+}
+
+function filterByTab(
+  reservations: BackendReservation[],
+  tab: TabId,
+  todayISO: string,
+): BackendReservation[] {
+  if (tab === 'hoy') return reservations.filter((r) => r.date === todayISO);
+  if (tab === 'proximas') return reservations.filter((r) => r.date > todayISO);
+  return reservations;
+}
+
+function sortReservations(reservations: BackendReservation[]): BackendReservation[] {
+  return [...reservations].sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.time.hour * 60 + a.time.minute - (b.time.hour * 60 + b.time.minute);
+  });
+}
+
+// ── Sub-component ────────────────────────────────────────────────────────────
+
+function ReservationCard({
+  reservation,
+  todayISO,
+}: Readonly<{
+  reservation: BackendReservation;
+  todayISO: string;
+}>) {
+  const dateLabel = getDateLabel(reservation.date, todayISO);
+  const timeLabel = formatTime(reservation.time);
+
+  return (
+    <View style={cardStyles.card}>
+      <View style={cardStyles.header}>
+        <Text style={cardStyles.time}>{timeLabel}</Text>
+        <Text style={cardStyles.date}>{dateLabel}</Text>
+      </View>
+      <Text style={cardStyles.guests}>
+        {'👥 '}
+        {reservation.numberOfGuests}{' '}
+        {reservation.numberOfGuests === 1 ? 'persona' : 'personas'}
+      </Text>
+      {Boolean(reservation.specialRequests) && (
+        <Text style={cardStyles.note}>"{reservation.specialRequests}"</Text>
+      )}
+      <Text style={cardStyles.reservationId}>Reserva #{reservation.id.slice(-6)}</Text>
+    </View>
+  );
+}
+
+const cardStyles = StyleSheet.create({
+  card: {
+    backgroundColor: '#1B2C3E',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.gold,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  time: {
+    color: colors.gold,
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: 'sans-serif-medium',
+  },
+  date: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'sans-serif-medium',
+    fontWeight: '600',
+  },
+  guests: {
+    color: 'rgba(240,234,220,0.8)',
+    fontSize: 14,
+    fontFamily: 'sans-serif-medium',
+    marginBottom: 4,
+  },
+  note: {
+    color: 'rgba(240,234,220,0.55)',
+    fontSize: 13,
+    fontFamily: 'sans-serif-medium',
+    fontStyle: 'italic',
+    marginBottom: 6,
+    lineHeight: 18,
+  },
+  reservationId: {
+    color: 'rgba(240,234,220,0.3)',
+    fontSize: 11,
+    fontFamily: 'sans-serif-medium',
+    marginTop: 4,
+  },
+});
+
+// ── Main component ───────────────────────────────────────────────────────────
 
 export default function GestionReservas() {
   const insets = useSafeAreaInsets();
-  const [tabActiva, setTabActiva] = useState<TabId>('hoy');
-  const [reservas, setReservas] = useState<Reserva[]>(RESERVAS_MOCK);
+  const activeRestaurantId = useAuthStore((s) => s.activeRestaurantId);
+  const [activeTab, setActiveTab] = useState<TabId>('hoy');
 
-  const reservasFiltradas = reservas.filter((r) => {
-    if (tabActiva === 'hoy') return r.tab === 'hoy' && r.estado !== 'rechazada';
-    if (tabActiva === 'semana') return r.tab === 'semana' && r.estado !== 'rechazada';
-    if (tabActiva === 'historial')
-      return r.estado === 'completada' || r.estado === 'rechazada';
-    return false;
+  const todayISO = useMemo(() => getTodayISO(), []);
+
+  const { data: restaurant } = useRestaurantById(activeRestaurantId ?? '');
+  const {
+    data: allReservations = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useRestaurantReservations(activeRestaurantId);
+
+  const filtered = useMemo(
+    () => sortReservations(filterByTab(allReservations, activeTab, todayISO)),
+    [allReservations, activeTab, todayISO],
+  );
+
+  const todayCount = useMemo(
+    () => allReservations.filter((r) => r.date === todayISO).length,
+    [allReservations, todayISO],
+  );
+
+  const upcomingCount = useMemo(
+    () => allReservations.filter((r) => r.date > todayISO).length,
+    [allReservations, todayISO],
+  );
+
+  const getTabLabel = (tab: (typeof TABS)[number]): string => {
+    if (tab.id === 'hoy' && todayCount > 0) return `${tab.label} (${todayCount})`;
+    if (tab.id === 'proximas' && upcomingCount > 0) return `${tab.label} (${upcomingCount})`;
+    return tab.label;
+  };
+
+  const restaurantName = restaurant?.name ?? 'Mi restaurante';
+  const today = new Date().toLocaleDateString('es-ES', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
   });
 
-  const pendientesHoy = reservas.filter(
-    (r) => r.tab === 'hoy' && r.estado === 'pendiente'
-  ).length;
-
-  const cambiarEstado = (id: string, nuevoEstado: EstadoReserva) =>
-    setReservas((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, estado: nuevoEstado } : r))
+  // ── No restaurant ──────────────────────────────────────────────────────────
+  if (!activeRestaurantId) {
+    return (
+      <View style={[styles.wrapper, styles.centered]}>
+        <Ionicons name="storefront-outline" size={52} color={colors.gold} />
+        <Text style={styles.emptyTitle}>Sin restaurante registrado</Text>
+        <Text style={styles.emptyDesc}>Ve a "Mi local" para configurar tu restaurante.</Text>
+      </View>
     );
+  }
 
   return (
     <View style={styles.wrapper}>
-      {/* Header con gradiente simulado */}
+      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Text style={styles.headerTitulo}>Gestión de Reservas</Text>
-        <Text style={styles.headerSub}>La Trattoria · Lunes 10 Mar 2026</Text>
+        <Text style={styles.headerTitle}>Gestión de Reservas</Text>
+        <Text style={styles.headerSub}>
+          {restaurantName} · {today}
+        </Text>
       </View>
 
       {/* Tabs */}
       <View style={styles.tabsContainer}>
         {TABS.map((tab) => {
-          const activa = tabActiva === tab.id;
-          const label =
-            tab.id === 'hoy' && pendientesHoy > 0
-              ? `${tab.label} (${pendientesHoy})`
-              : tab.label;
+          const isActive = activeTab === tab.id;
           return (
             <TouchableOpacity
               key={tab.id}
-              style={[styles.tab, activa && styles.tabActivo]}
-              onPress={() => setTabActiva(tab.id)}
+              style={[styles.tab, isActive && styles.tabActive]}
+              onPress={() => setActiveTab(tab.id)}
             >
-              <Text style={[styles.tabTexto, activa && styles.tabTextoActivo]}>
-                {label}
+              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                {getTabLabel(tab)}
               </Text>
             </TouchableOpacity>
           );
         })}
       </View>
 
-      {/* Lista de reservas */}
-      <ScrollView
-        style={styles.lista}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
-      >
-        {reservasFiltradas.length === 0 && (
-          <Text style={styles.sinResultados}>
-            No hay reservas en esta sección 🎉
-          </Text>
-        )}
+      {/* Content */}
+      {isLoading && (
+        <View style={styles.centered}>
+          <ActivityIndicator color={colors.gold} size="large" />
+          <Text style={styles.loadingText}>Cargando reservas...</Text>
+        </View>
+      )}
 
-        {reservasFiltradas.map((r) => (
-          <View
-            key={r.id}
-            style={[
-              styles.reservaCard,
-              { borderLeftColor: BORDER_COLORS[r.estado] },
-            ]}
-          >
-            {/* Cabecera */}
-            <View style={styles.reservaCabecera}>
-              <Text style={styles.reservaNombre}>{r.nombre}</Text>
-              <Text style={styles.reservaHoraBadge}>
-                {r.hora} · {r.dia}
+      {isError && !isLoading && (
+        <View style={styles.centered}>
+          <Ionicons name="wifi-outline" size={48} color="rgba(240,234,220,0.3)" />
+          <Text style={styles.emptyTitle}>No se pudieron cargar las reservas</Text>
+          <Text style={styles.emptyDesc}>Revisa tu conexión e intenta de nuevo.</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => void refetch()}>
+            <Text style={styles.retryBtnText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {!isLoading && !isError && (
+        <ScrollView
+          style={styles.list}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 40 }}
+        >
+          {filtered.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="calendar-outline" size={40} color="rgba(240,234,220,0.2)" />
+              <Text style={styles.emptyTitle}>
+                {activeTab === 'hoy' && 'Sin reservas para hoy'}
+                {activeTab === 'proximas' && 'Sin reservas próximas'}
+                {activeTab === 'todas' && 'Sin reservas registradas'}
               </Text>
             </View>
-
-            {/* Detalle */}
-            <Text style={styles.reservaDetalle}>
-              {'👥 '}
-              {r.personas} {r.personas === 1 ? 'persona' : 'personas'}
-              {r.mesa ? ` · ${r.mesa}` : ''}
-              {r.nota ? ` · ${r.nota}` : ''}
-            </Text>
-
-            {/* Acciones por estado */}
-            {r.estado === 'pendiente' && (
-              <View style={styles.botonesRow}>
-                <TouchableOpacity
-                  style={[styles.boton, styles.botonConfirmar]}
-                  onPress={() => cambiarEstado(r.id, 'confirmada')}
-                >
-                  <Text style={styles.botonTexto}>✓ Confirmar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.boton, styles.botonRechazar]}
-                  onPress={() => cambiarEstado(r.id, 'rechazada')}
-                >
-                  <Text style={styles.botonTexto}>✗ Rechazar</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {r.estado === 'confirmada' && (
-              <TouchableOpacity
-                style={[styles.boton, styles.botonCompletar]}
-                onPress={() => cambiarEstado(r.id, 'completada')}
-              >
-                <Text style={styles.botonTexto}>✓ Completar</Text>
-              </TouchableOpacity>
-            )}
-
-            {r.estado === 'completada' && (
-              <View style={[styles.boton, styles.botonCompletada]}>
-                <Text style={[styles.botonTexto, { color: '#4dd9c0' }]}>
-                  ✓ Completada
-                </Text>
-              </View>
-            )}
-
-            {r.estado === 'rechazada' && (
-              <View style={[styles.boton, styles.botonRechazada]}>
-                <Text style={[styles.botonTexto, { color: '#d9504d' }]}>
-                  ✗ Rechazada
-                </Text>
-              </View>
-            )}
-          </View>
-        ))}
-      </ScrollView>
+          ) : (
+            filtered.map((r) => (
+              <ReservationCard key={r.id} reservation={r} todayISO={todayISO} />
+            ))
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
+  wrapper: { flex: 1, backgroundColor: '#0C1D32' },
+  centered: {
     flex: 1,
-    backgroundColor: '#0C1D32',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
   },
 
   // Header
   header: {
     backgroundColor: '#0f2a1e',
     paddingHorizontal: 20,
-    paddingTop: 28,
-    paddingBottom: 24,
+    paddingBottom: 20,
   },
-  headerTitulo: {
+  headerTitle: {
     color: '#FFFFFF',
     fontSize: 28,
     fontWeight: '800',
@@ -257,6 +301,7 @@ const styles = StyleSheet.create({
     color: 'rgba(240,234,220,0.55)',
     fontSize: 13,
     fontFamily: 'sans-serif-medium',
+    textTransform: 'capitalize',
   },
 
   // Tabs
@@ -275,109 +320,61 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
   },
-  tabActivo: {
+  tabActive: {
     backgroundColor: '#243d2b',
     borderWidth: 1,
     borderColor: '#4dd9c0',
   },
-  tabTexto: {
+  tabText: {
     color: 'rgba(240,234,220,0.5)',
     fontSize: 12,
     fontFamily: 'sans-serif-medium',
     fontWeight: '600',
   },
-  tabTextoActivo: {
-    color: '#FFFFFF',
-  },
+  tabTextActive: { color: '#FFFFFF' },
 
-  // Lista
-  lista: {
-    flex: 1,
-    paddingHorizontal: 16,
-    marginTop: 12,
-  },
-  sinResultados: {
+  // List
+  list: { flex: 1, paddingHorizontal: 16, marginTop: 4 },
+
+  // Loading
+  loadingText: {
     color: 'rgba(240,234,220,0.5)',
     fontSize: 14,
-    textAlign: 'center',
-    paddingVertical: 30,
-    fontFamily: 'serif',
+    fontFamily: 'sans-serif-medium',
   },
 
-  // Reserva card
-  reservaCard: {
-    backgroundColor: '#1B2C3E',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 3,
-  },
-  reservaCabecera: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  // Empty / error
+  emptyState: {
     alignItems: 'center',
-    marginBottom: 6,
+    paddingVertical: 40,
+    gap: 12,
   },
-  reservaNombre: {
-    color: '#FFFFFF',
+  emptyTitle: {
+    color: 'rgba(240,234,220,0.6)',
     fontSize: 16,
-    fontWeight: 'bold',
     fontFamily: 'serif',
+    textAlign: 'center',
   },
-  reservaHoraBadge: {
-    color: '#c9a96e',
+  emptyDesc: {
+    color: 'rgba(240,234,220,0.4)',
     fontSize: 13,
-    fontWeight: '700',
     fontFamily: 'sans-serif-medium',
-  },
-  reservaDetalle: {
-    color: 'rgba(240,234,220,0.65)',
-    fontSize: 12,
-    fontFamily: 'sans-serif-medium',
-    marginBottom: 14,
-    lineHeight: 18,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 
-  // Botones
-  botonesRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  boton: {
-    flex: 1,
-    paddingVertical: 10,
+  // Retry
+  retryBtn: {
+    marginTop: 8,
+    backgroundColor: colors.gold,
     borderRadius: 10,
-    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
   },
-  botonConfirmar: {
-    backgroundColor: '#1e3d2a',
-    borderWidth: 1,
-    borderColor: '#4dd9c0',
-  },
-  botonRechazar: {
-    backgroundColor: '#3d1e1e',
-    borderWidth: 1,
-    borderColor: '#d9504d',
-  },
-  botonCompletar: {
-    backgroundColor: '#1B2C3E',
-    borderWidth: 1,
-    borderColor: '#7F8488',
-  },
-  botonCompletada: {
-    backgroundColor: 'rgba(77,217,192,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(77,217,192,0.3)',
-  },
-  botonRechazada: {
-    backgroundColor: 'rgba(217,80,77,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(217,80,77,0.3)',
-  },
-  botonTexto: {
-    color: '#FFFFFF',
-    fontSize: 13,
+  retryBtnText: {
+    color: '#0C1D32',
     fontWeight: '700',
+    fontSize: 14,
     fontFamily: 'sans-serif-medium',
   },
 });

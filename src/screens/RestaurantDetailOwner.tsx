@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -7,82 +7,99 @@ import {
   Image,
   ActivityIndicator,
   Linking,
+  StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { CompositeNavigationProp } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import ScreenContainer from '../components/layout/ScreenContainer';
-import { RestaurantDetail } from '../types/restaurant';
-import { getRestaurantById } from '../services/api/restaurantService';
-import { restaurantDetailMock, sampleRestaurant } from '../mocks/restaurantDetailMock';
+import { useRestaurantById } from '../hooks/useRestaurantById';
+import { useRestaurantReservations } from '../hooks/useRestaurantReservations';
+import { restaurantDetailMock } from '../mocks/restaurantDetailMock';
 import { parseMenuField } from '../utils/menuParser';
+import { isRestaurantOpenNow } from '../utils/restaurantSchedule';
 import { restaurantDetailStyles as styles } from './RestaurantDetailScreen.styles';
+import { colors } from '../theme/colors';
+import { useAuthStore } from '../store/authStore';
+import type { RestaurantDetail } from '../types/restaurant';
+import type { RestaurantTabParamList, RestaurantStackParamList } from '../navigation/types';
 
-interface RestaurantDetailScreenProps {
-  restaurantId?: string;
-}
+type MyLocalNav = CompositeNavigationProp<
+  BottomTabNavigationProp<RestaurantTabParamList, 'MyLocal'>,
+  NativeStackNavigationProp<RestaurantStackParamList>
+>;
 
-export default function RestaurantDetailOwner({
-  restaurantId = '1',
-}: RestaurantDetailScreenProps) {
-  const [restaurant, setRestaurant] = useState<RestaurantDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default function RestaurantDetailOwner() {
+  const navigation = useNavigation<MyLocalNav>();
+  const activeRestaurantId = useAuthStore((s) => s.activeRestaurantId);
 
-  useEffect(() => {
-    loadRestaurant();
-  }, [restaurantId]);
+  // React Query manages fetching and cache. When useUpdateRestaurant invalidates
+  // ['restaurant', id], this query refetches automatically even while the edit
+  // screen is on top of the stack, so data is fresh when the user navigates back.
+  const { data: rawData, isLoading, isError, refetch } = useRestaurantById(
+    activeRestaurantId ?? '',
+  );
+  const { data: reservations = [] } = useRestaurantReservations(activeRestaurantId);
 
-  const loadRestaurant = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await getRestaurantById(restaurantId);
-      const restaurantDetail: RestaurantDetail = {
-        ...data,
+  const restaurant: RestaurantDetail | null = rawData
+    ? {
         ...restaurantDetailMock,
-      };
-      setRestaurant(restaurantDetail);
-    } catch (err) {
-      console.error('Failed to load restaurant:', err);
-      setError('No se pudo cargar el restaurante');
-      // Use sample restaurant for development
-      const restaurantDetail: RestaurantDetail = {
-        ...sampleRestaurant,
-        ...restaurantDetailMock,
-      } as RestaurantDetail;
-      setRestaurant(restaurantDetail);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleReservation = () => {
-    // TODO: Navigate to reservation flow
-    console.log('Reservation button pressed');
-  };
+        ...rawData,
+        // Derive open/closed from the device clock + hour field, not openStatus.
+        isOpen: isRestaurantOpenNow(rawData.hour),
+      }
+    : null;
 
   const handleOpenMenu = (url: string) => {
     Linking.openURL(url).catch(() => {
-      console.error('Failed to open menu URL');
+      // URL could not be opened — no further action needed.
     });
   };
 
-  if (loading && !restaurant) {
+  const handleEdit = () => {
+    if (!activeRestaurantId) return;
+    navigation.navigate('RestaurantForm', { mode: 'edit', restaurantId: activeRestaurantId });
+  };
+
+  // ── No restaurant linked ─────────────────────────────────────────────────
+  if (!activeRestaurantId) {
     return (
       <ScreenContainer>
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#c9a96e" />
+          <Ionicons name="storefront-outline" size={52} color={colors.gold} />
+          <Text style={[styles.errorText, { textAlign: 'center', marginTop: 16 }]}>
+            Sin restaurante registrado
+          </Text>
+          <Text style={[styles.loadingText, { textAlign: 'center' }]}>
+            Ve a "Registrar Restaurante" para agregar tu local.
+          </Text>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  // ── Loading ──────────────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <ScreenContainer>
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.gold} />
           <Text style={styles.loadingText}>Cargando restaurante...</Text>
         </View>
       </ScreenContainer>
     );
   }
 
-  if (!restaurant) {
+  // ── Error / no data ──────────────────────────────────────────────────────
+  if (isError || !restaurant) {
     return (
       <ScreenContainer>
         <View style={styles.centerContainer}>
+          <Ionicons name="wifi-outline" size={48} color={colors.textMuted} />
           <Text style={styles.errorText}>No se pudo cargar el restaurante</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadRestaurant}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => void refetch()}>
             <Text style={styles.retryButtonText}>Reintentar</Text>
           </TouchableOpacity>
         </View>
@@ -90,9 +107,11 @@ export default function RestaurantDetailOwner({
     );
   }
 
-  const location = restaurant.locations?.[0] || 'Dirección no disponible';
   const parsedMenu = parseMenuField(restaurant.menu);
-  const priceLabel = `$${restaurant.priceMin.toLocaleString()} - $$${restaurant.priceMax.toLocaleString()}`;
+  const priceLabel =
+    restaurant.priceMin != null && restaurant.priceMax != null
+      ? `$${restaurant.priceMin.toLocaleString()} - $${restaurant.priceMax.toLocaleString()}`
+      : 'Sin precio';
   const cuisineTag = restaurant.theme || restaurant.tags?.[0] || 'Restaurante';
 
   return (
@@ -100,14 +119,12 @@ export default function RestaurantDetailOwner({
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Hero Section */}
         <View style={styles.heroSection}>
-
-          {/* Restaurant Logo */}
           <View style={styles.logoContainer}>
             {restaurant.logo ? (
               <Image source={{ uri: restaurant.logo }} style={styles.logo} />
             ) : (
               <View style={styles.logoFallback}>
-                <Ionicons name="restaurant" size={80} color="#c9a96e" />
+                <Ionicons name="restaurant" size={80} color={colors.gold} />
               </View>
             )}
           </View>
@@ -115,10 +132,9 @@ export default function RestaurantDetailOwner({
 
         {/* Content Section */}
         <View style={styles.contentSection}>
-          {/* Restaurant Name */}
           <Text style={styles.restaurantName}>{restaurant.name}</Text>
 
-          {/* Badges Row */}
+          {/* Badges */}
           <View style={styles.badgesRow}>
             <View style={styles.badge}>
               <Ionicons name="restaurant" size={14} color="#fff" />
@@ -129,20 +145,20 @@ export default function RestaurantDetailOwner({
               <Text style={styles.badgeText}>{restaurant.isOpen ? 'Abierto' : 'Cerrado'}</Text>
             </View>
             <View style={styles.badge}>
-              <Ionicons name="cash" size={14} color="#c9a96e" />
+              <Ionicons name="cash" size={14} color={colors.gold} />
               <Text style={[styles.badgeText, styles.badgePriceText]}>{priceLabel}</Text>
             </View>
           </View>
 
-          {/* Rating Row */}
+          {/* Rating */}
           <View style={styles.ratingRow}>
             <View style={styles.starsContainer}>
-              {[...Array(5)].map((_, i) => (
+              {([1, 2, 3, 4, 5] as const).map((pos) => (
                 <Ionicons
-                  key={i}
-                  name={i < Math.floor(restaurant.averageRating ?? 0) ? 'star' : 'star-outline'}
+                  key={`star-${pos}`}
+                  name={pos <= Math.floor(restaurant.averageRating ?? 0) ? 'star' : 'star-outline'}
                   size={16}
-                  color="#c9a96e"
+                  color={colors.gold}
                   style={{ marginRight: 2 }}
                 />
               ))}
@@ -153,31 +169,41 @@ export default function RestaurantDetailOwner({
             <Text style={styles.reviewCountText}>· {restaurant.reviewCount} reseñas</Text>
           </View>
 
-          {/* Description */}
           <Text style={styles.description}>{restaurant.description}</Text>
 
           {/* Info Cards Grid */}
           <View style={styles.infoGrid}>
-            {/* Address Card */}
+            {/* Locations — all entries shown in bold */}
             <View style={styles.infoCard}>
-              <Ionicons name="location" size={20} color="#c9a96e" />
-              <Text style={styles.infoLabel}>DIRECCIÓN</Text>
-              <Text style={styles.infoValue}>{location}</Text>
+              <Ionicons name="location" size={20} color={colors.gold} />
+              <Text style={styles.infoLabel}>DIRECCIONES</Text>
+              {restaurant.locations?.length > 0 ? (
+                restaurant.locations.map((loc) => (
+                  <Text key={loc} style={ownerStyles.locationValue}>
+                    {loc}
+                  </Text>
+                ))
+              ) : (
+                <Text style={styles.infoValue}>No disponible</Text>
+              )}
             </View>
 
-            {/* Hours Card */}
             <View style={styles.infoCard}>
-              <Ionicons name="time" size={20} color="#c9a96e" />
+              <Ionicons name="time" size={20} color={colors.gold} />
               <Text style={styles.infoLabel}>HORARIO</Text>
-              <Text style={styles.infoValue}>{restaurant.hour || 'Mar-Dom 12:00-22:00'}</Text>
-              <Text style={styles.infoExtra}>{restaurant.openUntilLabel}</Text>
+              <Text style={styles.infoValue}>{restaurant.hour || 'Consultar horario'}</Text>
             </View>
 
-            {/* Phone Card */}
             <View style={styles.infoCard}>
-              <Ionicons name="call" size={20} color="#c9a96e" />
+              <Ionicons name="call" size={20} color={colors.gold} />
               <Text style={styles.infoLabel}>TELÉFONO</Text>
-              <Text style={styles.infoValue}>{restaurant.phone}</Text>
+              <Text style={styles.infoValue}>{restaurant.phone || 'No disponible'}</Text>
+            </View>
+
+            <View style={styles.infoCard}>
+              <Ionicons name="calendar" size={20} color={colors.gold} />
+              <Text style={styles.infoLabel}>RESERVAS</Text>
+              <Text style={styles.infoValue}>{reservations.length}</Text>
             </View>
           </View>
 
@@ -189,7 +215,7 @@ export default function RestaurantDetailOwner({
 
             {parsedMenu.type === 'empty' && (
               <View style={styles.menuEmptyState}>
-                <Ionicons name="document-text-outline" size={40} color="#c9a96e" />
+                <Ionicons name="document-text-outline" size={40} color={colors.gold} />
                 <Text style={styles.menuEmptyText}>{parsedMenu.content}</Text>
               </View>
             )}
@@ -201,12 +227,12 @@ export default function RestaurantDetailOwner({
             {parsedMenu.type === 'items' && (
               <View style={styles.menuItems}>
                 {parsedMenu.content.map((item, idx) => (
-                  <View key={idx} style={styles.menuItem}>
-                    <Ionicons name="checkmark-circle" size={16} color="#c9a96e" />
+                  <View key={`${item.name}-${idx}`} style={styles.menuItem}>
+                    <Ionicons name="checkmark-circle" size={16} color={colors.gold} />
                     <View style={styles.menuItemContent}>
                       <Text style={styles.menuItemName}>{item.name}</Text>
                     </View>
-                    {item.price && (
+                    {item.price !== undefined && (
                       <Text style={styles.menuItemPrice}>${item.price.toLocaleString()}</Text>
                     )}
                   </View>
@@ -214,10 +240,10 @@ export default function RestaurantDetailOwner({
               </View>
             )}
 
-            {parsedMenu.type === 'url' && parsedMenu.displayUrl && (
+            {parsedMenu.type === 'url' && Boolean(parsedMenu.displayUrl) && (
               <TouchableOpacity
                 style={styles.menuUrlButton}
-                onPress={() => handleOpenMenu(parsedMenu.displayUrl!)}
+                onPress={() => handleOpenMenu(parsedMenu.displayUrl)}
               >
                 <Ionicons name="document" size={20} color="#fff" />
                 <Text style={styles.menuUrlButtonText}>Abrir menú</Text>
@@ -226,16 +252,39 @@ export default function RestaurantDetailOwner({
             )}
           </View>
 
-          {/* Reservation Button */}
-          <TouchableOpacity style={styles.reservationButton} onPress={handleReservation}>
-            <Ionicons name="fast-food" size={20} color="#fff" />
-            <Text style={styles.reservationButtonText}>Añadir otro lugar</Text>
+          {/* Edit Button */}
+          <TouchableOpacity style={ownerStyles.editButton} onPress={handleEdit}>
+            <Ionicons name="create-outline" size={20} color={colors.background} />
+            <Text style={ownerStyles.editButtonText}>Editar información del restaurante</Text>
           </TouchableOpacity>
 
-          {/* Bottom spacing for scroll */}
           <View style={styles.bottomSpacer} />
         </View>
       </ScrollView>
     </ScreenContainer>
   );
 }
+
+const ownerStyles = StyleSheet.create({
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.gold,
+    paddingVertical: 14,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  editButtonText: {
+    color: colors.background,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  locationValue: {
+    color: 'rgba(240,234,220,0.9)',
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+});

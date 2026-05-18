@@ -90,7 +90,10 @@ export default function RestaurantDetailScreen() {
 
   const location = restaurant.locations?.[0] || 'Dirección no disponible';
   const parsedMenu = parseMenuField(restaurant.menu);
-  const priceLabel = `$${restaurant.priceMin.toLocaleString()} - $${restaurant.priceMax.toLocaleString()}`;
+  const priceLabel =
+    restaurant.priceMin != null && restaurant.priceMax != null
+      ? `$${restaurant.priceMin.toLocaleString()} - $${restaurant.priceMax.toLocaleString()}`
+      : 'Sin precio';
   const cuisineTag = restaurant.theme || restaurant.tags?.[0] || 'Restaurante';
   const showLogo = Boolean(restaurant.logo) && !logoLoadError;
   const displayPhone = restaurant.phone || 'No disponible';

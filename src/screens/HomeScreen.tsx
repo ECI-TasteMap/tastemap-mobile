@@ -30,7 +30,8 @@ type HomeNav = CompositeNavigationProp<
   NativeStackNavigationProp<UserStackParamList>
 >;
 
-const getPrecio = (min: number) => {
+const getPrecio = (min: number | null): string => {
+  if (min == null) return '—';
   if (min < 20000) return '$';
   if (min < 40000) return '$$';
   if (min < 80000) return '$$$';

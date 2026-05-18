@@ -69,7 +69,7 @@ export default function UserLoginScreen() {
       footerSecondaryActionText="Accede aquí →"
       footerSecondaryActionColor={colors.teal}
       onPrimaryPress={handleSend}
-      onSecondaryPress={() => {}}
+      onSecondaryPress={() => navigation.navigate('UserRegister')}
       onFooterSecondaryActionPress={() => navigation.navigate('RestaurantLogin')}
     />
   );

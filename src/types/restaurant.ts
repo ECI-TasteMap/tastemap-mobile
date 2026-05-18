@@ -14,8 +14,10 @@ export interface Restaurant {
   theme?: string;
   locations: string[];
   tags: string[];
-  priceMin: number;
-  priceMax: number;
+  /** Null when the owner did not set a price range on creation. */
+  priceMin: number | null;
+  /** Null when the owner did not set a price range on creation. */
+  priceMax: number | null;
   hour?: string;
   /** Nullable — not all restaurants have a phone number registered. */
   phone?: string | null;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -7,81 +7,232 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRestaurantById } from '../hooks/useRestaurantById';
+import { createRestaurant, updateRestaurant } from '../services/api/restaurantService';
+import { useAuthStore } from '../store/authStore';
+import { colors } from '../theme/colors';
+import type { RestaurantStackParamList } from '../navigation/types';
 
-// ── Tipos ──────────────────────────────────────────────────────────────────
-type RangoPrecio = '$' | '$$' | '$$$' | '$$$$';
+// ── Types ──────────────────────────────────────────────────────────────────
 
-interface FormData {
-  nombre: string;
-  direccion: string;
-  tipoCocina: string[];       // lista de strings → se manda tal cual al backend
-  rangoPrecio: RangoPrecio | '';
-  telefono: string;
-  horario: string;
-  descripcion: string;
-  // fotos: File[] → se agrega cuando conectes al backend / ImagePicker
+interface RestaurantFormState {
+  name: string;
+  locations: string[];
+  tags: string[];
+  priceMin: string;
+  priceMax: string;
+  phone: string;
+  hour: string;
+  description: string;
+  theme: string;
 }
 
-const RANGOS: RangoPrecio[] = ['$', '$$', '$$$', '$$$$'];
-// ───────────────────────────────────────────────────────────────────────────
+const INITIAL_FORM: RestaurantFormState = {
+  name: '',
+  locations: [],
+  tags: [],
+  priceMin: '',
+  priceMax: '',
+  phone: '',
+  hour: '',
+  description: '',
+  theme: '',
+};
 
-export default function RegistrarRestaurante() {
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function validateRestaurantForm(
+  form: RestaurantFormState,
+  mode: 'create' | 'edit',
+  backendUserId: string | null,
+): string | null {
+  if (!form.name.trim()) return 'El nombre del restaurante es obligatorio.';
+  if (mode === 'create' && form.locations.length === 0) return 'Agrega al menos una dirección.';
+  if (mode === 'create' && !backendUserId) {
+    return 'No se encontró tu cuenta. Cierra sesión e ingresa nuevamente.';
+  }
+
+  const minStr = form.priceMin.trim();
+  const maxStr = form.priceMax.trim();
+  if (minStr !== '' || maxStr !== '') {
+    const min = Number(minStr);
+    const max = Number(maxStr);
+    if (minStr !== '' && (Number.isNaN(min) || min < 0)) return 'El precio mínimo debe ser un número positivo.';
+    if (maxStr !== '' && (Number.isNaN(max) || max < 0)) return 'El precio máximo debe ser un número positivo.';
+    if (minStr !== '' && maxStr !== '' && min > max) {
+      return 'El precio mínimo no puede ser mayor al máximo.';
+    }
+  }
+  return null;
+}
+
+function buildRestaurantFormData(
+  form: RestaurantFormState,
+  mode: 'create' | 'edit',
+  backendUserId: string | null,
+): FormData {
+  const fd = new FormData();
+  if (mode === 'create') fd.append('ownerId', backendUserId!);
+  fd.append('name', form.name.trim());
+  if (form.phone.trim() !== '') fd.append('phone', form.phone.trim());
+  if (form.description.trim() !== '') fd.append('description', form.description.trim());
+  if (form.theme.trim() !== '') fd.append('theme', form.theme.trim());
+  if (form.hour.trim() !== '') fd.append('hour', form.hour.trim());
+
+  // Each entry is a separate append so Spring receives List<String>.
+  form.locations
+    .filter((l) => l.trim() !== '')
+    .forEach((l) => fd.append('locations', l.trim()));
+  form.tags
+    .filter((t) => t.trim() !== '')
+    .forEach((t) => fd.append('tags', t.trim()));
+
+  const minStr = form.priceMin.trim();
+  const maxStr = form.priceMax.trim();
+  if (minStr !== '') {
+    const val = Number(minStr);
+    if (!Number.isNaN(val) && val >= 0) fd.append('priceMin', String(val));
+  }
+  if (maxStr !== '') {
+    const val = Number(maxStr);
+    if (!Number.isNaN(val) && val >= 0) fd.append('priceMax', String(val));
+  }
+  return fd;
+}
+
+// ── Component ──────────────────────────────────────────────────────────────
+
+export default function RestaurantFormScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RestaurantStackParamList>>();
+  const route = useRoute<RouteProp<RestaurantStackParamList, 'RestaurantForm'>>();
+  const { mode, restaurantId } = route.params;
   const insets = useSafeAreaInsets();
-  const [form, setForm] = useState<FormData>({
-    nombre: '',
-    direccion: '',
-    tipoCocina: [],
-    rangoPrecio: '',
-    telefono: '',
-    horario: '',
-    descripcion: '',
-  });
+  const queryClient = useQueryClient();
+  const backendUserId = useAuthStore((s) => s.backendUserId);
 
-  // Input temporal para el tag de cocina
-  const [cocinaInput, setCocinaInput] = useState('');
+  const [form, setForm] = useState<RestaurantFormState>(INITIAL_FORM);
+  const [tagInput, setTagInput] = useState('');
+  const [locationInput, setLocationInput] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const set = (campo: keyof FormData, valor: any) =>
-    setForm((prev) => ({ ...prev, [campo]: valor }));
+  const isEdit = mode === 'edit';
+  const targetId = isEdit ? (restaurantId ?? '') : '';
 
-  // Agrega un tag al presionar coma, Enter o el botón "+"
-  const agregarTag = () => {
-    const tag = cocinaInput.trim().replace(/,$/, '');
-    if (!tag) return;
-    if (!form.tipoCocina.includes(tag)) {
-      set('tipoCocina', [...form.tipoCocina, tag]);
+  // Only runs the query in edit mode when restaurantId is present.
+  const { data: existing, isLoading: loadingExisting } = useRestaurantById(targetId);
+
+  // Prefill form once the restaurant data arrives in edit mode.
+  useEffect(() => {
+    if (isEdit && existing) {
+      setForm({
+        name: existing.name ?? '',
+        locations: existing.locations ?? [],
+        tags: existing.tags ?? [],
+        priceMin: existing.priceMin != null ? String(existing.priceMin) : '',
+        priceMax: existing.priceMax != null ? String(existing.priceMax) : '',
+        phone: existing.phone ?? '',
+        hour: existing.hour ?? '',
+        description: existing.description ?? '',
+        theme: existing.theme ?? '',
+      });
     }
-    setCocinaInput('');
+  }, [isEdit, existing]);
+
+  const set = <K extends keyof RestaurantFormState>(field: K, value: RestaurantFormState[K]) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
+
+  // ── Tags ────────────────────────────────────────────────────────────────
+
+  const addTag = () => {
+    const tag = tagInput.trim().replace(/,$/, '');
+    if (tag && !form.tags.includes(tag)) {
+      set('tags', [...form.tags, tag]);
+    }
+    setTagInput('');
   };
 
-  const eliminarTag = (tag: string) =>
-    set(
-      'tipoCocina',
-      form.tipoCocina.filter((t) => t !== tag)
-    );
+  const removeTag = (tag: string) =>
+    set('tags', form.tags.filter((t) => t !== tag));
 
-  const handleCocinaChange = (text: string) => {
-    // Si escribe una coma, auto-agrega
+  const handleTagChange = (text: string) => {
     if (text.endsWith(',')) {
-      setCocinaInput(text.slice(0, -1));
-      agregarTag();
+      setTagInput(text.slice(0, -1));
+      addTag();
     } else {
-      setCocinaInput(text);
+      setTagInput(text);
     }
   };
 
-  const enviar = () => {
-    // Validación básica
-    if (!form.nombre || !form.direccion || form.tipoCocina.length === 0 || !form.rangoPrecio) {
-      Alert.alert('Faltan campos', 'Completa todos los campos obligatorios.');
+  // ── Locations ───────────────────────────────────────────────────────────
+
+  const addLocation = () => {
+    const loc = locationInput.trim();
+    if (loc && !form.locations.includes(loc)) {
+      set('locations', [...form.locations, loc]);
+    }
+    setLocationInput('');
+  };
+
+  const removeLocation = (loc: string) =>
+    set('locations', form.locations.filter((l) => l !== loc));
+
+  // ── Submit ──────────────────────────────────────────────────────────────
+
+  const handleSubmit = async () => {
+    const validationError = validateRestaurantForm(form, mode, backendUserId);
+    if (validationError) {
+      Alert.alert('Campo inválido', validationError);
       return;
     }
-    // payload listo para el backend
-    const payload = { ...form };
-    console.log('Payload →', JSON.stringify(payload, null, 2));
-    Alert.alert('Enviado', 'Tu restaurante fue enviado para revisión.');
+
+    const fd = buildRestaurantFormData(form, mode, backendUserId);
+    const successTitle = isEdit ? 'Cambios guardados' : 'Restaurante registrado';
+    const successMsg = isEdit
+      ? 'La información fue actualizada correctamente.'
+      : 'Tu restaurante fue enviado para revisión.';
+    const errorMsg = isEdit
+      ? 'No se pudieron guardar los cambios. Intenta de nuevo.'
+      : 'No se pudo registrar el restaurante. Intenta de nuevo.';
+
+    setSubmitting(true);
+    try {
+      if (mode === 'create') {
+        await createRestaurant(fd);
+      } else {
+        await updateRestaurant(targetId, fd);
+      }
+      void queryClient.invalidateQueries({ queryKey: ['restaurants'] });
+      if (targetId) {
+        void queryClient.invalidateQueries({ queryKey: ['restaurant', targetId] });
+      }
+      Alert.alert(successTitle, successMsg, [{ text: 'OK', onPress: () => navigation.goBack() }]);
+    } catch {
+      Alert.alert('Error', errorMsg);
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  // ── Loading (edit mode only) ─────────────────────────────────────────────
+
+  if (isEdit && loadingExisting) {
+    return (
+      <View style={[styles.wrapper, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.gold} />
+        <Text style={styles.loadingText}>Cargando datos del restaurante...</Text>
+      </View>
+    );
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────
 
   return (
     <View style={styles.wrapper}>
@@ -93,58 +244,50 @@ export default function RegistrarRestaurante() {
       >
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <Text style={styles.headerTitulo}>Registrar Restaurante</Text>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitulo}>
+            {isEdit ? 'Editar mi local' : 'Registrar Restaurante'}
+          </Text>
           <Text style={styles.headerSub}>
-            Aparece en TasteMap y atrae nuevos clientes
+            {isEdit
+              ? 'Actualiza la información de tu restaurante'
+              : 'Aparece en TasteMap y atrae nuevos clientes'}
           </Text>
         </View>
 
-        {/* Banner info */}
-        <View style={styles.banner}>
-          <Text style={styles.bannerTexto}>
-            ⏳ Estado inicial "En revisión" hasta aprobación del equipo TasteMap
-          </Text>
-        </View>
+        {!isEdit && (
+          <View style={styles.banner}>
+            <Text style={styles.bannerTexto}>
+              ⏳ Estado inicial "En revisión" hasta aprobación del equipo TasteMap
+            </Text>
+          </View>
+        )}
 
-        {/* ── Nombre ── */}
+        {/* Nombre */}
         <View style={styles.campo}>
           <Text style={styles.label}>NOMBRE DEL RESTAURANTE *</Text>
           <TextInput
             style={styles.input}
             placeholder="Ej: La Trattoria Italiana"
             placeholderTextColor="#4a6070"
-            value={form.nombre}
-            onChangeText={(v) => set('nombre', v)}
+            value={form.name}
+            onChangeText={(v) => set('name', v)}
           />
         </View>
 
-        {/* ── Dirección ── */}
+        {/* Direcciones */}
         <View style={styles.campo}>
-          <Text style={styles.label}>DIRECCIÓN COMPLETA *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Cra 13 #67–42, Chapinero, Bogotá"
-            placeholderTextColor="#4a6070"
-            value={form.direccion}
-            onChangeText={(v) => set('direccion', v)}
-          />
-        </View>
-
-        {/* ── Tipo de cocina (tag input) ── */}
-        <View style={styles.campo}>
-          <Text style={styles.label}>TIPO DE COCINA *</Text>
-          <Text style={styles.labelHint}>
-            Escribe y presiona "+" o separa con coma
-          </Text>
-
-          {/* Tags existentes */}
-          {form.tipoCocina.length > 0 && (
+          <Text style={styles.label}>DIRECCIONES{mode === 'create' ? ' *' : ''}</Text>
+          <Text style={styles.labelHint}>Agrega una o más sedes</Text>
+          {form.locations.length > 0 && (
             <View style={styles.tagsWrap}>
-              {form.tipoCocina.map((tag) => (
-                <View key={tag} style={styles.tag}>
-                  <Text style={styles.tagTexto}>{tag}</Text>
+              {form.locations.map((loc) => (
+                <View key={loc} style={styles.tag}>
+                  <Text style={styles.tagTexto}>{loc}</Text>
                   <TouchableOpacity
-                    onPress={() => eliminarTag(tag)}
+                    onPress={() => removeLocation(loc)}
                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
                     <Text style={styles.tagX}>✕</Text>
@@ -153,78 +296,127 @@ export default function RegistrarRestaurante() {
               ))}
             </View>
           )}
-
-          {/* Input + botón */}
           <View style={styles.tagInputRow}>
             <TextInput
               style={styles.tagInput}
-              placeholder="Ej: Italiana, Japonesa…"
+              placeholder="Ej: Cra 13 #67–42, Chapinero, Bogotá"
               placeholderTextColor="#4a6070"
-              value={cocinaInput}
-              onChangeText={handleCocinaChange}
-              onSubmitEditing={agregarTag}
+              value={locationInput}
+              onChangeText={setLocationInput}
+              onSubmitEditing={addLocation}
               returnKeyType="done"
             />
-            <TouchableOpacity style={styles.tagAddBtn} onPress={agregarTag}>
+            <TouchableOpacity style={styles.tagAddBtn} onPress={addLocation}>
               <Text style={styles.tagAddBtnTexto}>+</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ── Rango de precio ── */}
+        {/* Tipo de cocina */}
         <View style={styles.campo}>
-          <Text style={styles.label}>RANGO DE PRECIO *</Text>
-          <View style={styles.rangosRow}>
-            {RANGOS.map((r) => (
-              <TouchableOpacity
-                key={r}
-                style={[
-                  styles.rangoBtn,
-                  form.rangoPrecio === r && styles.rangoBtnActivo,
-                ]}
-                onPress={() => set('rangoPrecio', r)}
-              >
-                <Text
-                  style={[
-                    styles.rangoBtnTexto,
-                    form.rangoPrecio === r && styles.rangoBtnTextoActivo,
-                  ]}
-                >
-                  {r}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <Text style={styles.label}>TIPO DE COCINA</Text>
+          <Text style={styles.labelHint}>Escribe y presiona "+" o separa con coma</Text>
+          {form.tags.length > 0 && (
+            <View style={styles.tagsWrap}>
+              {form.tags.map((tag) => (
+                <View key={tag} style={styles.tag}>
+                  <Text style={styles.tagTexto}>{tag}</Text>
+                  <TouchableOpacity
+                    onPress={() => removeTag(tag)}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.tagX}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+          <View style={styles.tagInputRow}>
+            <TextInput
+              style={styles.tagInput}
+              placeholder="Ej: Italiana, Japonesa…"
+              placeholderTextColor="#4a6070"
+              value={tagInput}
+              onChangeText={handleTagChange}
+              onSubmitEditing={addTag}
+              returnKeyType="done"
+            />
+            <TouchableOpacity style={styles.tagAddBtn} onPress={addTag}>
+              <Text style={styles.tagAddBtnTexto}>+</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* ── Teléfono ── */}
+        {/* Temática */}
         <View style={styles.campo}>
-          <Text style={styles.label}>TELÉFONO *</Text>
+          <Text style={styles.label}>TEMÁTICA / AMBIENTE</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Ej: Romántico, Familiar, Casual…"
+            placeholderTextColor="#4a6070"
+            value={form.theme}
+            onChangeText={(v) => set('theme', v)}
+          />
+        </View>
+
+        {/* Rango de precios — inputs numéricos directos */}
+        <View style={styles.campo}>
+          <Text style={styles.label}>RANGO DE PRECIOS</Text>
+          <Text style={styles.labelHint}>Valores en pesos colombianos (COP)</Text>
+          <View style={styles.precioRow}>
+            <View style={styles.precioField}>
+              <Text style={styles.precioLabel}>PRECIO MÍNIMO</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: 25000"
+                placeholderTextColor="#4a6070"
+                keyboardType="numeric"
+                value={form.priceMin}
+                onChangeText={(v) => set('priceMin', v.replace(/\D/g, ''))}
+              />
+            </View>
+            <View style={styles.precioField}>
+              <Text style={styles.precioLabel}>PRECIO MÁXIMO</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: 70000"
+                placeholderTextColor="#4a6070"
+                keyboardType="numeric"
+                value={form.priceMax}
+                onChangeText={(v) => set('priceMax', v.replace(/\D/g, ''))}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Teléfono */}
+        <View style={styles.campo}>
+          <Text style={styles.label}>TELÉFONO</Text>
           <TextInput
             style={styles.input}
             placeholder="+57 310 555 0000"
             placeholderTextColor="#4a6070"
             keyboardType="phone-pad"
-            value={form.telefono}
-            onChangeText={(v) => set('telefono', v)}
+            value={form.phone}
+            onChangeText={(v) => set('phone', v)}
           />
         </View>
 
-        {/* ── Horario ── */}
+        {/* Horario */}
         <View style={styles.campo}>
-          <Text style={styles.label}>HORARIO DE ATENCIÓN *</Text>
+          <Text style={styles.label}>HORARIO DE ATENCIÓN</Text>
           <TextInput
             style={styles.input}
-            placeholder="Ej: Mar–Dom 12:00–22:00"
+            placeholder="Ej: 11:00-21:00"
             placeholderTextColor="#4a6070"
-            value={form.horario}
-            onChangeText={(v) => set('horario', v)}
+            value={form.hour}
+            onChangeText={(v) => set('hour', v)}
           />
         </View>
 
-        {/* ── Descripción ── */}
+        {/* Descripción */}
         <View style={styles.campo}>
-          <Text style={styles.label}>DESCRIPCIÓN *</Text>
+          <Text style={styles.label}>DESCRIPCIÓN</Text>
           <TextInput
             style={[styles.input, styles.textarea]}
             placeholder="Describe tu restaurante, especialidades y ambiente..."
@@ -232,26 +424,36 @@ export default function RegistrarRestaurante() {
             multiline
             numberOfLines={4}
             textAlignVertical="top"
-            value={form.descripcion}
-            onChangeText={(v) => set('descripcion', v)}
+            value={form.description}
+            onChangeText={(v) => set('description', v)}
           />
         </View>
 
-        {/* ── Fotos ── */}
+        {/* Logo placeholder */}
         <View style={styles.campo}>
-          <Text style={styles.label}>FOTOS (MÍNIMO 3) *</Text>
-          <TouchableOpacity style={styles.fotoUpload} onPress={() => {}}>
+          <Text style={styles.label}>LOGO (PRÓXIMAMENTE)</Text>
+          <View style={styles.fotoUpload}>
             <Text style={styles.fotoEmoji}>📷</Text>
-            <Text style={styles.fotoTexto}>Toca para subir fotos</Text>
-            <Text style={styles.fotoHint}>JPG, PNG · Máx 10MB c/u</Text>
-          </TouchableOpacity>
+            <Text style={styles.fotoTexto}>Subida de imágenes próximamente</Text>
+            <Text style={styles.fotoHint}>JPG, PNG · Máx 10 MB</Text>
+          </View>
         </View>
       </ScrollView>
 
       {/* CTA fijo en la parte inferior */}
       <View style={[styles.ctaContainer, { paddingBottom: insets.bottom + 20 }]}>
-        <TouchableOpacity style={styles.ctaBtn} onPress={enviar}>
-          <Text style={styles.ctaBtnTexto}>Enviar para revisión →</Text>
+        <TouchableOpacity
+          style={[styles.ctaBtn, submitting && styles.ctaBtnDisabled]}
+          onPress={handleSubmit}
+          disabled={submitting}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.ctaBtnTexto}>
+              {isEdit ? 'Guardar cambios →' : 'Enviar para revisión →'}
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -260,12 +462,25 @@ export default function RegistrarRestaurante() {
 
 const styles = StyleSheet.create({
   wrapper: { flex: 1, backgroundColor: '#0C1D32' },
+  centered: { justifyContent: 'center', alignItems: 'center' },
   scroll: { flex: 1, paddingHorizontal: 20 },
+  loadingText: {
+    color: 'rgba(240,234,220,0.5)',
+    marginTop: 12,
+    fontSize: 14,
+    fontFamily: 'sans-serif-medium',
+  },
 
   // Header
-  header: {
-    paddingTop: 28,
-    paddingBottom: 16,
+  header: { paddingBottom: 16 },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   headerTitulo: {
     color: '#FFFFFF',
@@ -281,7 +496,7 @@ const styles = StyleSheet.create({
     fontFamily: 'sans-serif-medium',
   },
 
-  // Banner
+  // Banner (create only)
   banner: {
     backgroundColor: '#1a3028',
     borderRadius: 12,
@@ -326,12 +541,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(127,132,136,0.3)',
   },
-  textarea: {
-    height: 100,
-    paddingTop: 14,
+  textarea: { height: 100, paddingTop: 14 },
+
+  // Price range row
+  precioRow: { flexDirection: 'row', gap: 12 },
+  precioField: { flex: 1 },
+  precioLabel: {
+    color: 'rgba(240,234,220,0.45)',
+    fontSize: 10,
+    letterSpacing: 0.8,
+    fontFamily: 'sans-serif-medium',
+    marginBottom: 6,
   },
 
-  // Tag input
+  // Tag / location chip list
   tagsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -354,16 +577,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'sans-serif-medium',
   },
-  tagX: {
-    color: '#4dd9c0',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  tagInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
+  tagX: { color: '#4dd9c0', fontSize: 11, fontWeight: 'bold' },
+  tagInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   tagInput: {
     flex: 1,
     backgroundColor: '#1B2C3E',
@@ -391,35 +606,7 @@ const styles = StyleSheet.create({
     lineHeight: 28,
   },
 
-  // Rango de precio
-  rangosRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  rangoBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#1B2C3E',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(127,132,136,0.3)',
-  },
-  rangoBtnActivo: {
-    backgroundColor: '#c9a96e',
-    borderColor: '#c9a96e',
-  },
-  rangoBtnTexto: {
-    color: 'rgba(240,234,220,0.55)',
-    fontSize: 15,
-    fontWeight: '700',
-    fontFamily: 'sans-serif-medium',
-  },
-  rangoBtnTextoActivo: {
-    color: '#0C1D32',
-  },
-
-  // Fotos
+  // Logo placeholder
   fotoUpload: {
     backgroundColor: '#1B2C3E',
     borderRadius: 12,
@@ -460,6 +647,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
   },
+  ctaBtnDisabled: { opacity: 0.5 },
   ctaBtnTexto: {
     color: '#FFFFFF',
     fontSize: 16,

@@ -1,137 +1,181 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-} from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, View, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getRestaurants } from '../services/api/restaurantService';
+import { useOwnerRestaurants } from '../hooks/useOwnerRestaurants';
+import { isRestaurantOpenNow } from '../utils/restaurantSchedule';
+import {
+  useRestaurantReservations,
+  useRestaurantReservationsByDate,
+} from '../hooks/useRestaurantReservations';
+import { useAuthStore } from '../store/authStore';
+import { colors } from '../theme/colors';
+import type { BackendLocalTime } from '../types/reservation';
 
-// ── Mock data (reemplazar con llamadas al backend) ──────────────────────────
-const STATS = {
-  reservasMes: 24,
-  reservasMesDelta: '+8 vs. mes anterior',
-  rating: 4.8,
-  ratingReviews: 128,
-  pendientesHoy: 3,
-  tasaConfirmacion: 89,
+const formatTime = ({ hour, minute }: BackendLocalTime): string =>
+  `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+const formatDate = (): string => {
+  const opts: Intl.DateTimeFormatOptions = { weekday: 'long', day: '2-digit', month: 'long' };
+  return new Date().toLocaleDateString('es-ES', opts).replace(/\b\w/g, (l) => l.toUpperCase());
 };
 
-const RESERVAS_HOY = [
-  {
-    id: '1',
-    nombre: 'María García',
-    hora: '8:00 PM',
-    personas: 2,
-    mesa: 'Mesa interior',
-    nota: '"Aniversario, flores si es posible"',
-    estado: 'pendiente', // pendiente | confirmada | completada
-  },
-  {
-    id: '2',
-    nombre: 'Carlos Herrera',
-    hora: '7:30 PM',
-    personas: 4,
-    mesa: 'Mesa exterior',
-    nota: null,
-    estado: 'confirmada',
-  },
-];
-
-const RESENAS = [
-  {
-    id: '1',
-    nombre: 'Valentina R.',
-    estrellas: 5,
-    texto: 'La pasta es increíble. Ambiente perfecto para una cita romántica.',
-  },
-  {
-    id: '2',
-    nombre: 'Andrés M.',
-    estrellas: 4,
-    texto: 'Muy buena atención y tiempo de espera razonable.',
-  },
-];
-
-// ───────────────────────────────────────────────────────────────────────────
-
-const formatearFecha = () => {
-  const opciones: Intl.DateTimeFormatOptions = { weekday: 'long', day: '2-digit', month: 'long' };
-  const str = new Date().toLocaleDateString('es-ES', opciones);
-  return str.replace(/\b\w/g, (l) => l.toUpperCase());
-};
-
-const Estrellas = ({ cantidad }: { cantidad: number }) => (
+const Stars = ({ count }: { count: number }) => (
   <Text style={styles.estrellas}>
-    {'★'.repeat(cantidad)}{'☆'.repeat(5 - cantidad)}
+    {'★'.repeat(Math.min(5, Math.round(count)))}
+    {'☆'.repeat(Math.max(0, 5 - Math.round(count)))}
   </Text>
 );
 
 export default function RestaurantOwnerDashboard() {
   const insets = useSafeAreaInsets();
-  const [reservas, setReservas] = useState(RESERVAS_HOY);
+  const backendUserId = useAuthStore((s) => s.backendUserId);
+  const activeRestaurantId = useAuthStore((s) => s.activeRestaurantId);
+  const setActiveRestaurantId = useAuthStore((s) => s.setActiveRestaurantId);
 
-  const confirmar = (id: string) =>
-    setReservas((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, estado: 'confirmada' } : r))
+  const { data: restaurants = [], isLoading: loadingRestaurants } =
+    useOwnerRestaurants(backendUserId);
+
+  // Auto-select first restaurant when none is active
+  useEffect(() => {
+    if (!activeRestaurantId && restaurants.length > 0) {
+      setActiveRestaurantId(restaurants[0].id);
+    }
+  }, [restaurants, activeRestaurantId, setActiveRestaurantId]);
+
+  const activeRestaurant = useMemo(
+    () => restaurants.find((r) => r.id === activeRestaurantId) ?? restaurants[0] ?? null,
+    [restaurants, activeRestaurantId],
+  );
+
+  const todayISO = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  const { data: allReservations = [], isLoading: loadingAll } = useRestaurantReservations(
+    activeRestaurant?.id ?? null,
+  );
+  const { data: todayReservations = [], isLoading: loadingToday } = useRestaurantReservationsByDate(
+    activeRestaurant?.id ?? null,
+    todayISO,
+  );
+
+  const reservasMes = useMemo(() => {
+    const now = new Date();
+    return allReservations.filter((r) => {
+      const [y, m] = r.date.split('-').map(Number);
+      return m - 1 === now.getMonth() && y === now.getFullYear();
+    }).length;
+  }, [allReservations]);
+
+  // ── Loading ─────────────────────────────────────────────────────────────────
+  if (loadingRestaurants) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator color={colors.gold} size="large" />
+        <Text style={styles.cargandoText}>Cargando tu restaurante...</Text>
+      </View>
     );
+  }
 
-  const rechazar = (id: string) =>
-    setReservas((prev) => prev.filter((r) => r.id !== id));
-
-  const completar = (id: string) =>
-    setReservas((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, estado: 'completada' } : r))
+  // ── Sin backendUserId: cuenta no sincronizada con el backend ─────────────────
+  if (!backendUserId) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + 24 }]}>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="warning-outline" size={52} color={colors.gold} />
+          <Text style={styles.emptyTitle}>Cuenta sin sincronizar</Text>
+          <Text style={styles.emptyDesc}>
+            Tu cuenta de Supabase aún no está vinculada al sistema backend.{'\n'}
+            Contacta al administrador de TasteMap para completar la configuración.
+          </Text>
+          {/* TODO: When backend adds GET /api/v1/users/me, trigger auto-sync here */}
+        </View>
+      </View>
     );
+  }
+
+  // ── Sin restaurante registrado ───────────────────────────────────────────────
+  if (!activeRestaurant) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + 24 }]}>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="storefront-outline" size={52} color={colors.gold} />
+          <Text style={styles.emptyTitle}>Sin restaurante registrado</Text>
+          <Text style={styles.emptyDesc}>
+            No encontramos restaurantes asociados a tu cuenta.{'\n'}
+            Registra tu primer local en la pestaña "Mi local".
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Vista principal con datos reales ─────────────────────────────────────────
+  const isOpen = isRestaurantOpenNow(activeRestaurant.hour);
+  const rating = activeRestaurant.averageRating ?? 0;
+  const priceLabel =
+    activeRestaurant.priceMin != null && activeRestaurant.priceMax != null
+      ? `$${activeRestaurant.priceMin.toLocaleString()} – $${activeRestaurant.priceMax.toLocaleString()}`
+      : 'Sin precio';
 
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ paddingTop: insets.top }}
+      contentContainerStyle={{ paddingTop: insets.top, paddingBottom: 40 }}
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.direccion}> </Text>
-        <Text style={styles.bienvenida}>Hola, Restaurante</Text>
-        <Text style={styles.fecha}>{formatearFecha()}</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.restaurantName} numberOfLines={1}>
+            {activeRestaurant.name}
+          </Text>
+          <View style={[styles.statusBadge, isOpen ? styles.statusOpen : styles.statusClosed]}>
+            <Text style={styles.statusText}>{isOpen ? 'Abierto' : 'Cerrado'}</Text>
+          </View>
+        </View>
+        <Text style={styles.fecha}>{formatDate()}</Text>
       </View>
 
-      {/* Stats grid 2×2 */}
+      {/* Stats 2×2 */}
       <View style={styles.statsGrid}>
-        {/* Reservas este mes */}
+        {/* Reservas del mes */}
         <View style={styles.statCard}>
-          <Text style={styles.statValor}>{STATS.reservasMes}</Text>
+          {loadingAll ? (
+            <ActivityIndicator color={colors.gold} size="small" style={{ marginBottom: 4 }} />
+          ) : (
+            <Text style={styles.statValor}>{reservasMes}</Text>
+          )}
           <Text style={styles.statLabel}>RESERVAS ESTE MES</Text>
-          <Text style={styles.statDelta}>↑ {STATS.reservasMesDelta}</Text>
+          <Text style={styles.statDelta}>Total acumulado</Text>
         </View>
 
         {/* Rating */}
         <View style={styles.statCard}>
-          <Text style={styles.statValor}>{STATS.rating}</Text>
+          <Text style={styles.statValor}>{rating > 0 ? rating.toFixed(1) : '—'}</Text>
           <Text style={styles.statLabel}>RATING PROMEDIO</Text>
-          <Text style={styles.statDelta}>
-            {'★'.repeat(Math.round(STATS.rating))} {STATS.ratingReviews} reseñas
-          </Text>
+          {rating > 0 ? (
+            <Stars count={rating} />
+          ) : (
+            <Text style={styles.statDelta}>Sin reseñas</Text>
+          )}
         </View>
 
-        {/* Pendientes hoy */}
+        {/* Reservas hoy */}
         <View style={styles.statCard}>
-          <Text style={styles.statValor}>{STATS.pendientesHoy}</Text>
-          <Text style={styles.statLabel}>PENDIENTES HOY</Text>
-          <Text style={[styles.statDelta, styles.statDeltaWarning]}>
-            ⚠ Requieren acción
-          </Text>
+          {loadingToday ? (
+            <ActivityIndicator color={colors.gold} size="small" style={{ marginBottom: 4 }} />
+          ) : (
+            <Text style={styles.statValor}>{todayReservations.length}</Text>
+          )}
+          <Text style={styles.statLabel}>RESERVAS HOY</Text>
+          <Text style={styles.statDelta}>{todayISO}</Text>
         </View>
 
-        {/* Tasa confirmación */}
+        {/* Rango de precios */}
         <View style={styles.statCard}>
-          <Text style={styles.statValor}>{STATS.tasaConfirmacion}%</Text>
-          <Text style={styles.statLabel}>TASA CONFIRMACIÓN</Text>
-          <Text style={styles.statDelta}>↑ Buena gestión</Text>
+          <Text style={[styles.statValor, styles.statValorSm]}>{priceLabel}</Text>
+          <Text style={styles.statLabel}>RANGO DE PRECIOS</Text>
+          <Text style={styles.statDelta}>{activeRestaurant.theme ?? '—'}</Text>
         </View>
       </View>
 
@@ -139,73 +183,57 @@ export default function RestaurantOwnerDashboard() {
       <View style={styles.seccion}>
         <Text style={styles.seccionTitulo}>Reservas de hoy</Text>
 
-        {reservas.map((r) => (
+        {loadingToday && <ActivityIndicator color={colors.gold} style={{ marginVertical: 20 }} />}
+
+        {!loadingToday && todayReservations.length === 0 && (
+          <Text style={styles.sinReservas}>Sin reservas para hoy</Text>
+        )}
+
+        {todayReservations.map((r) => (
           <View key={r.id} style={styles.reservaCard}>
-            {/* Cabecera */}
             <View style={styles.reservaCabecera}>
-              <Text style={styles.reservaNombre}>{r.nombre}</Text>
-              <Text style={styles.reservaHora}>{r.hora}</Text>
+              <Text style={styles.reservaHora}>{formatTime(r.time)}</Text>
+              <Text style={styles.reservaPersonas}>
+                👥 {r.numberOfGuests} {r.numberOfGuests === 1 ? 'persona' : 'personas'}
+              </Text>
             </View>
-
-            {/* Detalle */}
-            <Text style={styles.reservaDetalle}>
-              👥 {r.personas} {r.personas === 1 ? 'persona' : 'personas'} · {r.mesa}
-              {r.nota ? ` · ${r.nota}` : ''}
-            </Text>
-
-            {/* Acciones */}
-            {r.estado === 'pendiente' && (
-              <View style={styles.botonesRow}>
-                <TouchableOpacity
-                  style={[styles.boton, styles.botonConfirmar]}
-                  onPress={() => confirmar(r.id)}
-                >
-                  <Text style={styles.botonTexto}>✓ Confirmar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.boton, styles.botonRechazar]}
-                  onPress={() => rechazar(r.id)}
-                >
-                  <Text style={styles.botonTexto}>✗ Rechazar</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {r.estado === 'confirmada' && (
-              <TouchableOpacity
-                style={[styles.boton, styles.botonCompletar]}
-                onPress={() => completar(r.id)}
-              >
-                <Text style={styles.botonTexto}>✓ Completar</Text>
-              </TouchableOpacity>
-            )}
-
-            {r.estado === 'completada' && (
-              <View style={styles.estadoBadge}>
-                <Text style={styles.estadoBadgeTexto}>✓ Completada</Text>
-              </View>
-            )}
+            {r.specialRequests ? (
+              <Text style={styles.reservaDetalle}>"{r.specialRequests}"</Text>
+            ) : null}
+            {/* TODO: Enrich with user name via GET /api/v1/users/{userId} when a batch endpoint exists */}
+            <Text style={styles.reservaUserId}>Reserva #{r.id.slice(-6)}</Text>
           </View>
         ))}
-
-        {reservas.length === 0 && (
-          <Text style={styles.sinReservas}>Sin reservas pendientes por hoy 🎉</Text>
-        )}
       </View>
 
-      {/* Últimas reseñas */}
-      <View style={[styles.seccion, { marginBottom: 40 }]}>
-        <Text style={styles.seccionTitulo}>Últimas reseñas</Text>
+      {/* Datos del restaurante */}
+      <View style={styles.seccion}>
+        <Text style={styles.seccionTitulo}>Mi restaurante</Text>
 
-        {RESENAS.map((resena) => (
-          <View key={resena.id} style={styles.resenaCard}>
-            <View style={styles.resenaCabecera}>
-              <Text style={styles.resenaNombre}>{resena.nombre}</Text>
-              <Estrellas cantidad={resena.estrellas} />
-            </View>
-            <Text style={styles.resenaTexto}>{resena.texto}</Text>
+        {activeRestaurant.locations?.map((loc) => (
+          <View key={loc} style={styles.infoRow}>
+            <Ionicons name="location-outline" size={16} color={colors.gold} />
+            <Text style={styles.infoText}>{loc}</Text>
           </View>
         ))}
+
+        {activeRestaurant.hour ? (
+          <View style={styles.infoRow}>
+            <Ionicons name="time-outline" size={16} color={colors.gold} />
+            <Text style={styles.infoText}>{activeRestaurant.hour}</Text>
+          </View>
+        ) : null}
+
+        {activeRestaurant.phone ? (
+          <View style={styles.infoRow}>
+            <Ionicons name="call-outline" size={16} color={colors.gold} />
+            <Text style={styles.infoText}>{activeRestaurant.phone}</Text>
+          </View>
+        ) : null}
+
+        {activeRestaurant.description ? (
+          <Text style={styles.descripcion}>{activeRestaurant.description}</Text>
+        ) : null}
       </View>
     </ScrollView>
   );
@@ -217,22 +245,77 @@ const styles = StyleSheet.create({
     backgroundColor: '#0C1D32',
     paddingHorizontal: 20,
   },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cargandoText: {
+    color: 'rgba(240,234,220,0.5)',
+    marginTop: 12,
+    fontFamily: 'sans-serif-medium',
+    fontSize: 14,
+  },
+
+  // Empty states
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    paddingTop: 40,
+    gap: 16,
+  },
+  emptyTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: 'serif',
+    textAlign: 'center',
+  },
+  emptyDesc: {
+    color: 'rgba(240,234,220,0.55)',
+    fontSize: 14,
+    fontFamily: 'sans-serif-medium',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
 
   // Header
   header: { paddingTop: 12, paddingBottom: 8 },
-  direccion: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    fontFamily: 'serif',
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
-  bienvenida: {
+  restaurantName: {
+    flex: 1,
     color: '#FFFFFF',
     fontFamily: 'serif',
-    fontSize: 27,
-    fontWeight: '700',
+    fontSize: 30,
+    fontWeight: '800',
     fontStyle: 'italic',
+    letterSpacing: -0.5,
+  },
+  statusBadge: {
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+  },
+  statusOpen: {
+    backgroundColor: 'rgba(52,168,83,0.15)',
+    borderColor: 'rgba(52,168,83,0.4)',
+  },
+  statusClosed: {
+    backgroundColor: 'rgba(217,80,77,0.12)',
+    borderColor: 'rgba(217,80,77,0.3)',
+  },
+  statusText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontFamily: 'sans-serif-medium',
+    fontWeight: '600',
   },
   fecha: {
     color: 'rgba(240,234,220,0.55)',
@@ -262,6 +345,10 @@ const styles = StyleSheet.create({
     fontFamily: 'serif',
     lineHeight: 42,
   },
+  statValorSm: {
+    fontSize: 18,
+    lineHeight: 26,
+  },
   statLabel: {
     color: 'rgba(240,234,220,0.55)',
     fontSize: 10,
@@ -275,8 +362,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'sans-serif-medium',
   },
-  statDeltaWarning: {
-    color: '#e8a838',
+  estrellas: {
+    color: '#c9a96e',
+    fontSize: 14,
   },
 
   // Sección
@@ -289,7 +377,7 @@ const styles = StyleSheet.create({
     fontFamily: 'serif',
   },
 
-  // Reserva card
+  // Reserva card (simplificada, sin botones de estado — backend no tiene status)
   reservaCard: {
     backgroundColor: '#1B2C3E',
     borderRadius: 16,
@@ -304,69 +392,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  reservaNombre: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-    fontFamily: 'serif',
-  },
   reservaHora: {
     color: '#c9a96e',
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '700',
+    fontFamily: 'sans-serif-medium',
+  },
+  reservaPersonas: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontFamily: 'sans-serif-medium',
   },
   reservaDetalle: {
     color: 'rgba(240,234,220,0.65)',
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'sans-serif-medium',
-    marginBottom: 14,
+    fontStyle: 'italic',
+    marginBottom: 6,
     lineHeight: 18,
   },
-
-  // Botones de acción
-  botonesRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  boton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  botonConfirmar: {
-    backgroundColor: '#1e3d2a',
-    borderWidth: 1,
-    borderColor: '#4dd9c0',
-  },
-  botonRechazar: {
-    backgroundColor: '#3d1e1e',
-    borderWidth: 1,
-    borderColor: '#d9504d',
-  },
-  botonCompletar: {
-    backgroundColor: '#1B2C3E',
-    borderWidth: 1,
-    borderColor: '#7F8488',
-  },
-  botonTexto: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
+  reservaUserId: {
+    color: 'rgba(240,234,220,0.3)',
+    fontSize: 11,
     fontFamily: 'sans-serif-medium',
-  },
-  estadoBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(77,217,192,0.15)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  estadoBadgeTexto: {
-    color: '#4dd9c0',
-    fontSize: 12,
-    fontFamily: 'sans-serif-medium',
+    marginTop: 4,
   },
   sinReservas: {
     color: 'rgba(240,234,220,0.5)',
@@ -376,33 +425,24 @@ const styles = StyleSheet.create({
     fontFamily: 'serif',
   },
 
-  // Reseñas
-  resenaCard: {
-    backgroundColor: '#1B2C3E',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  resenaCabecera: {
+  // Info del restaurante
+  infoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    gap: 10,
+    marginBottom: 10,
   },
-  resenaNombre: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: 'bold',
-    fontFamily: 'serif',
-  },
-  estrellas: {
-    color: '#c9a96e',
+  infoText: {
+    color: 'rgba(240,234,220,0.75)',
     fontSize: 14,
+    fontFamily: 'sans-serif-medium',
+    flex: 1,
   },
-  resenaTexto: {
-    color: 'rgba(240,234,220,0.7)',
+  descripcion: {
+    color: 'rgba(240,234,220,0.55)',
     fontSize: 13,
     fontFamily: 'sans-serif-medium',
     lineHeight: 20,
+    marginTop: 8,
   },
 });
